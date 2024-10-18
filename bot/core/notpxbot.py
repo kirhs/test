@@ -91,8 +91,9 @@ class NotPXBot:
         await self._send_tganalytics_event(session)
 
         sleep_time = randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1]) * 60
+        total_minutes = sleep_time // 60
         logger.info(
-            f"{self.session_name} | Sleeping for: {round(sleep_time / 60 / 60, 1)} hours"
+            f"{self.session_name} | Sleeping for: {total_minutes // 60} hours and {total_minutes % 60} minutes"
         )
         await asyncio.sleep(sleep_time)
 
@@ -101,11 +102,17 @@ class NotPXBot:
         start_night_time = randint(settings.NIGHT_START[0], settings.NIGHT_START[1])
         end_night_time = randint(settings.NIGHT_END[0], settings.NIGHT_END[1])
         if start_night_time <= current_hour <= end_night_time:
-            sleep_time = end_night_time - current_hour
-            logger.info(
-                f"{self.session_name} | It's night time. Sleeping for: {sleep_time} hours"
+            random_minutes_to_sleep_time = randint(
+                settings.RANDOM_MINUTES_TO_SLEEP_TIME[0], settings.RANDOM_MINUTES_TO_SLEEP_TIME[1]
             )
-            await asyncio.sleep(sleep_time * 60 * 60)
+            sleep_time_in_hours = end_night_time - current_hour
+            logger.info(
+                f"{self.session_name} | It's night time. Sleeping for: {int(sleep_time_in_hours)} hours and {random_minutes_to_sleep_time} minutes"
+            )
+
+            await asyncio.sleep(
+                (sleep_time_in_hours * 60 * 60) + (random_minutes_to_sleep_time * 60)
+            )
 
     async def _get_telegram_web_data(
         self, peer_id: str, short_name: str, start_param: str
@@ -303,7 +310,7 @@ class NotPXBot:
         try:
             process = await asyncio.create_subprocess_exec(
                 "node",
-                "bot/utils/task_solver/main.js",
+                "bot/core/task_solver/main.js",
                 task,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

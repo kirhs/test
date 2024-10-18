@@ -23,7 +23,7 @@ async def process() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-a", "--action", type=int, help="Action to perform")
 
-    print_banner_animation()
+    # print_banner_animation()
 
     action = parser.parse_args().action
 

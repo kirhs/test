@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     SLEEP_AT_NIGHT: bool = True
     NIGHT_START: list[int] = [0, 2]  # 24 hour format in your timezone
     NIGHT_END: list[int] = [8, 10]  # 24 hour format in your timezone
+    RANDOM_MINUTES_TO_SLEEP_TIME: list[int] = [2, 30]  # in minutes
 
 
 settings = Settings()  # type: ignore
