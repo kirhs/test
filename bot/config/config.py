@@ -7,16 +7,19 @@ class Settings(BaseSettings):
     API_ID: int
     API_HASH: str
 
+    PLAY_INTRO: bool = True
+
     USE_REF: bool = True
     REF_ID: str = "f773211512"  # It would be great if you didn't change it, but I'm not stopping you
 
-    START_DELAY: list[int] = [10, 240]  # in seconds
-    SLEEP_TIME: list[int] = [60, 120]  # in minutes
+    INITIAL_START_DELAY_SECONDS: list[int] = [10, 240]  # in seconds
+
+    SLEEP_INTERVAL_MINUTES: list[int] = [60, 120]  # in minutes
 
     SLEEP_AT_NIGHT: bool = True
-    NIGHT_START: list[int] = [0, 2]  # 24 hour format in your timezone
-    NIGHT_END: list[int] = [8, 10]  # 24 hour format in your timezone
-    RANDOM_MINUTES_TO_SLEEP_TIME: list[int] = [2, 30]  # in minutes
+    NIGHT_START_HOURS: list[int] = [0, 2]  # 24 hour format in your timezone
+    NIGHT_END_HOURS: list[int] = [6, 8]  # 24 hour fo]rmat in your timezone
+    ADDITIONAL_NIGHT_SLEEP_MINUTES: list[int] = [2, 45]  # in minutes
 
 
 settings = Settings()  # type: ignore

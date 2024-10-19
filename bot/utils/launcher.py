@@ -23,7 +23,8 @@ async def process() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-a", "--action", type=int, help="Action to perform")
 
-    # print_banner_animation()
+    if settings.PLAY_INTRO:
+        print_banner_animation()
 
     action = parser.parse_args().action
 
@@ -60,7 +61,7 @@ async def run_tasks(accounts: List[Dict[str, str]]) -> None:
             )
             proxy = Proxy.from_str(proxy=raw_proxy).as_url if raw_proxy else None
 
-            start_delay = randint(settings.START_DELAY[0], settings.START_DELAY[1])
+            start_delay = randint(settings.INITIAL_START_DELAY_SECONDS[0], settings.INITIAL_START_DELAY_SECONDS[1])
 
             tasks.append(
                 asyncio.create_task(

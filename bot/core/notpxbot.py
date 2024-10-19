@@ -90,7 +90,7 @@ class NotPXBot:
 
         await self._send_tganalytics_event(session)
 
-        sleep_time = randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1]) * 60
+        sleep_time = randint(settings.SLEEP_INTERVAL_MINUTES[0], settings.SLEEP_INTERVAL_MINUTES[1]) * 60
         total_minutes = sleep_time // 60
         logger.info(
             f"{self.session_name} | Sleeping for: {total_minutes // 60} hours and {total_minutes % 60} minutes"
@@ -99,11 +99,11 @@ class NotPXBot:
 
     async def _handle_night_sleep(self):
         current_hour = datetime.now().hour
-        start_night_time = randint(settings.NIGHT_START[0], settings.NIGHT_START[1])
-        end_night_time = randint(settings.NIGHT_END[0], settings.NIGHT_END[1])
+        start_night_time = randint(settings.NIGHT_START_HOURS[0], settings.NIGHT_START_HOURS[1])
+        end_night_time = randint(settings.NIGHT_END_HOURS[0], settings.NIGHT_END_HOURS[1])
         if start_night_time <= current_hour <= end_night_time:
             random_minutes_to_sleep_time = randint(
-                settings.RANDOM_MINUTES_TO_SLEEP_TIME[0], settings.RANDOM_MINUTES_TO_SLEEP_TIME[1]
+                settings.ADDITIONAL_NIGHT_SLEEP_MINUTES[0], settings.ADDITIONAL_NIGHT_SLEEP_MINUTES[1]
             )
             sleep_time_in_hours = end_night_time - current_hour
             logger.info(
