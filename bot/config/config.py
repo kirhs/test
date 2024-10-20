@@ -21,5 +21,7 @@ class Settings(BaseSettings):
     NIGHT_END_HOURS: list[int] = [6, 8]  # 24 hour format in your timezone
     ADDITIONAL_NIGHT_SLEEP_MINUTES: list[int] = [2, 45]  # in minutes
 
+    CLAIM_PX: bool = True
+
 
 settings = Settings()  # type: ignore

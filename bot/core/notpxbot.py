@@ -85,14 +85,19 @@ class NotPXBot:
         plausible_payload = await self._create_plausible_payload(self.auth_url)
         await self._send_plausible_event(session, plausible_payload)
 
-        info_about_me = await self._get_me(session)
-        logger.info(
-            f"{self.session_name} | Successfully logged in | Balance: {info_about_me['balance']} | League: {info_about_me['league']}"
-        )
+        await self._get_me(session)
 
         await self._send_tganalytics_event(session)
 
-        sleep_time = randint(settings.SLEEP_INTERVAL_MINUTES[0], settings.SLEEP_INTERVAL_MINUTES[1]) * 60
+        if settings.CLAIM_PX:
+            await self._claim_px(session)
+
+        sleep_time = (
+            randint(
+                settings.SLEEP_INTERVAL_MINUTES[0], settings.SLEEP_INTERVAL_MINUTES[1]
+            )
+            * 60
+        )
         total_minutes = sleep_time // 60
         logger.info(
             f"{self.session_name} | Sleeping for: {total_minutes // 60} hours and {total_minutes % 60} minutes"
@@ -101,11 +106,16 @@ class NotPXBot:
 
     async def _handle_night_sleep(self):
         current_hour = datetime.now().hour
-        start_night_time = randint(settings.NIGHT_START_HOURS[0], settings.NIGHT_START_HOURS[1])
-        end_night_time = randint(settings.NIGHT_END_HOURS[0], settings.NIGHT_END_HOURS[1])
+        start_night_time = randint(
+            settings.NIGHT_START_HOURS[0], settings.NIGHT_START_HOURS[1]
+        )
+        end_night_time = randint(
+            settings.NIGHT_END_HOURS[0], settings.NIGHT_END_HOURS[1]
+        )
         if start_night_time <= current_hour <= end_night_time:
             random_minutes_to_sleep_time = randint(
-                settings.ADDITIONAL_NIGHT_SLEEP_MINUTES[0], settings.ADDITIONAL_NIGHT_SLEEP_MINUTES[1]
+                settings.ADDITIONAL_NIGHT_SLEEP_MINUTES[0],
+                settings.ADDITIONAL_NIGHT_SLEEP_MINUTES[1],
             )
             sleep_time_in_hours = end_night_time - current_hour
             logger.info(
@@ -199,13 +209,17 @@ class NotPXBot:
             else ""
         )
 
-    async def _get_me(self, session: aiohttp.ClientSession, attempts: int = 1):
+    async def _get_me(self, session: aiohttp.ClientSession, attempts: int = 1) -> None:
         try:
             response = await session.get(
                 "https://notpx.app/api/v1/users/me", headers=self.headers["notpx"]
             )
             response.raise_for_status()
-            return await response.json()
+            response_json = await response.json()
+
+            logger.info(
+                f"{self.session_name} | Successfully logged in | Balance: {response_json['balance']} | League: {response_json['league']}"
+            )
         except Exception as error:
             if attempts <= 3:
                 logger.info(
@@ -284,7 +298,10 @@ class NotPXBot:
         ]
 
     async def _send_plausible_event(
-        self, session: aiohttp.ClientSession, payload: Dict[str, str | None], attempts: int = 1
+        self,
+        session: aiohttp.ClientSession,
+        payload: Dict[str, str | None],
+        attempts: int = 1,
     ) -> None:
         try:
             response = await session.post(
@@ -306,7 +323,7 @@ class NotPXBot:
             raise Exception(
                 f"{self.session_name} | Error while sending plausible event | {error or 'Unknown error'}"
             )
-    
+
     async def _create_plausible_payload(self, url: str) -> Dict[str, str | None]:
         return {"n": "pageview", "u": url, "d": "notpx.app", "r": None}
 
@@ -327,6 +344,40 @@ class NotPXBot:
             return stdout.decode("utf-8").strip()
         except Exception as error:
             raise Exception(f"{self.session_name} | Error while solving task | {error}")
+
+    async def _claim_px(
+        self, session: aiohttp.ClientSession, attempts: int = 1
+    ) -> None:
+        try:
+            plausible_payload = await self._create_plausible_payload(
+                "https://app.notpx.app/claiming"
+            )
+            await self._send_plausible_event(session, plausible_payload)
+
+            response = await session.get(
+                "https://notpx.app/api/v1/mining/claim", headers=self.headers["notpx"]
+            )
+            response.raise_for_status()
+            response_json = await response.json()
+
+            logger.info(
+                f"{self.session_name} | Successfully claimed {response_json['claimed']} px"
+            )
+
+            plausible_payload = await self._create_plausible_payload(
+                "https://app.notpx.app/"
+            )
+            await self._send_plausible_event(session, plausible_payload)
+        except Exception as error:
+            if attempts < 1:
+                logger.info(
+                    f"{self.session_name} | Failed to claim px, retrying in 5 seconds | Attempts: {attempts}"
+                )
+                await asyncio.sleep(5)
+                return await self._claim_px(session=session, attempts=attempts + 1)
+            raise Exception(
+                f"{self.session_name} | Error while claiming px | {error or 'Unknown error'}"
+            )
 
     def _handle_error(self, error) -> None:
         logger.error(f"{self.session_name} | {error or 'Something went wrong'}")
