@@ -5,14 +5,14 @@ from typing import Dict, List
 
 class JsonManager:
     @staticmethod
-    def save_to_json(path: str, data: dict) -> None:
-        existing_data = JsonManager.load_from_json(path)
-        if not existing_data:
-            existing_data = []
-        new_data = existing_data.append(data)
+    def save_to_json(path: str, new_data: dict) -> None:
+        data = JsonManager.load_from_json(path)
+        if not data:
+            data = []
+        data.append(new_data)
         try:
             with open(path, "w") as f:
-                json.dump(new_data, f, indent=4)
+                json.dump(data, f, indent=4)
         except Exception as error:
             raise Exception(
                 f"Unable to save json file: {path} | {error or 'Unknown error'}"
@@ -24,7 +24,10 @@ class JsonManager:
             return []
         try:
             with open(path, "r") as f:
-                return json.load(f)
+                content = f.read()
+                if not content:
+                    return []
+                return json.loads(content)
         except json.decoder.JSONDecodeError:
             raise Exception(f"Unable to parse json file: {path}")
         except Exception as error:
