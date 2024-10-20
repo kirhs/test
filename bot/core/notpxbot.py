@@ -82,7 +82,9 @@ class NotPXBot:
 
         self.headers["notpx"]["Authorization"] = f"initData {telegram_web_data}"
 
-        await self._send_plausible_event(session)
+        plausible_payload = await self._create_plausible_payload(self.auth_url)
+        await self._send_plausible_event(session, plausible_payload)
+
         info_about_me = await self._get_me(session)
         logger.info(
             f"{self.session_name} | Successfully logged in | Balance: {info_about_me['balance']} | League: {info_about_me['league']}"
@@ -282,10 +284,9 @@ class NotPXBot:
         ]
 
     async def _send_plausible_event(
-        self, session: aiohttp.ClientSession, attempts: int = 1
+        self, session: aiohttp.ClientSession, payload: Dict[str, str | None], attempts: int = 1
     ) -> None:
         try:
-            payload = {"n": "pageview", "u": self.auth_url, "d": "notpx.app", "r": None}
             response = await session.post(
                 "https://plausible.joincommunity.xyz/api/event",
                 headers=self.headers["plausible"],
@@ -300,11 +301,14 @@ class NotPXBot:
                 )
                 await asyncio.sleep(5)
                 return await self._send_plausible_event(
-                    session=session, attempts=attempts + 1
+                    session=session, payload=payload, attempts=attempts + 1
                 )
             raise Exception(
                 f"{self.session_name} | Error while sending plausible event | {error or 'Unknown error'}"
             )
+    
+    async def _create_plausible_payload(self, url: str) -> Dict[str, str | None]:
+        return {"n": "pageview", "u": url, "d": "notpx.app", "r": None}
 
     async def _solve_task(self, task: str) -> str:
         try:
