@@ -2,7 +2,7 @@ import asyncio
 import json
 import traceback
 from datetime import datetime
-from random import randint
+from random import randint, choice
 from time import time
 from typing import Dict, List
 from urllib.parse import parse_qs, quote, unquote
@@ -58,7 +58,8 @@ class NotPXBot:
                     await self._execute_main_loop(session)
                 except Exception as error:
                     self._handle_error(error)
-                    await asyncio.sleep(10)
+                    logger.info(f"{self.session_name} | Retrying in 60 seconds")
+                    await asyncio.sleep(60)
 
     async def _proxy_checker(self, session: aiohttp.ClientSession, proxy: str):
         try:
@@ -88,6 +89,9 @@ class NotPXBot:
         await self._get_me(session)
 
         await self._send_tganalytics_event(session)
+
+        if not await self._check_my(session):
+            await self._set_template(session)
 
         if settings.CLAIM_PX:
             await self._claim_px(session)
@@ -263,7 +267,7 @@ class NotPXBot:
 
             logger.info(f"{self.session_name} | Sent tganalytics event")
         except Exception as error:
-            if attempts < 1:
+            if attempts <= 3:
                 logger.info(
                     f"{self.session_name} | Failed to send tganalytics event, retrying in 5 seconds | Attempts: {attempts}"
                 )
@@ -312,7 +316,7 @@ class NotPXBot:
             response.raise_for_status()
             logger.info(f"{self.session_name} | Plausible event sent")
         except Exception as error:
-            if attempts < 1:
+            if attempts <= 3:
                 logger.info(
                     f"{self.session_name} | Failed to send plausible event, retrying in 5 seconds | Attempts: {attempts}"
                 )
@@ -343,7 +347,9 @@ class NotPXBot:
                 )
             return stdout.decode("utf-8").strip()
         except Exception as error:
-            raise Exception(f"{self.session_name} | Error while solving task | {error}")
+            raise Exception(
+                f"{self.session_name} | Error while solving task | {error or 'Unknown error'}"
+            )
 
     async def _claim_px(
         self, session: aiohttp.ClientSession, attempts: int = 1
@@ -369,7 +375,7 @@ class NotPXBot:
             )
             await self._send_plausible_event(session, plausible_payload)
         except Exception as error:
-            if attempts < 1:
+            if attempts <= 3:
                 logger.info(
                     f"{self.session_name} | Failed to claim px, retrying in 5 seconds | Attempts: {attempts}"
                 )
@@ -377,6 +383,96 @@ class NotPXBot:
                 return await self._claim_px(session=session, attempts=attempts + 1)
             raise Exception(
                 f"{self.session_name} | Error while claiming px | {error or 'Unknown error'}"
+            )
+
+    async def _set_template(
+        self, session: aiohttp.ClientSession, attempts: int = 1
+    ) -> None:
+        try:
+            plausible_payload = await self._create_plausible_payload(
+                "https://app.notpx.app/template"
+            )
+            await self._send_plausible_event(session, plausible_payload)
+
+            response = await session.get(
+                "https://notpx.app/api/v1/image/template/list?limit=12&offset=0",
+                headers=self.headers["notpx"],
+            )
+            response.raise_for_status()
+            response_json = await response.json()
+
+            random_template = choice(response_json)
+
+            response = await session.get(
+                f"https://notpx.app/api/v1/image/template/{random_template["templateId"]}",
+                headers=self.headers["notpx"],
+            )
+            response.raise_for_status()
+            response_json = await response.json()
+
+            self.template_id = response_json["id"]
+            self.template_url = response_json["url"]
+            self.template_x = response_json["x"]
+            self.template_y = response_json["y"]
+            self.template_image_size = response_json["imageSize"]
+
+            print(response_json)
+
+            response = await session.put(
+                f"https://notpx.app/api/v1/image/template/subscribe/{self.template_id}",
+                headers=self.headers["notpx"],
+            )
+            response.raise_for_status()
+
+            logger.info(f"{self.session_name} | Successfully changed template")
+
+            plausible_payload = await self._create_plausible_payload(
+                "https://app.notpx.app/"
+            )
+            await self._send_plausible_event(session, plausible_payload)
+        except Exception as error:
+            if attempts <= 3:
+                logger.info(
+                    f"{self.session_name} | Failed to change template, retrying in 5 seconds | Attempts: {attempts}"
+                )
+                await asyncio.sleep(5)
+                return await self._set_template(session=session, attempts=attempts + 1)
+            raise Exception(
+                f"{self.session_name} | Error while changing template | {error or 'Unknown error'}"
+            )
+
+    async def _check_my(
+        self, session: aiohttp.ClientSession, attempts: int = 1
+    ) -> bool:
+        try:
+            response = await session.get(
+                "https://notpx.app/api/v1/image/template/my",
+                headers=self.headers["notpx"],
+            )
+            if response.status == 404:
+                print(f"Получил статус {response.status}")
+                return False
+            elif response.status == 200:
+                print(f"Получил статус {response.status}")
+                response_json = await response.json()
+
+                self.template_id = response_json["templateId"]
+                self.template_url = response_json["url"]
+                self.template_x = response_json["x"]
+                self.template_y = response_json["y"]
+                self.template_image_size = response_json["imageSize"]
+                return True
+            else:
+                response.raise_for_status()
+        except Exception as error:
+            if attempts <= 3:
+                logger.info(
+                    f"{self.session_name} | Failed to check my, retrying in 5 seconds | Attempts: {attempts}"
+                )
+                await asyncio.sleep(5)
+                return await self._check_my(session=session, attempts=attempts + 1)
+            raise Exception(
+                f"{self.session_name} | Error while checking my | {error or 'Unknown error'}"
             )
 
     def _handle_error(self, error) -> None:
