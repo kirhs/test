@@ -113,7 +113,7 @@ class NotPXBot:
             if (
                 self.boost_energyLimit != self.max_boosts["energyLimit"]
                 or self.boost_paintReward != self.max_boosts["paintReward"]
-                or self.boost_reChargingSpeed != self.max_boosts["reChargingSpeed"]
+                or self.boost_reChargeSpeed != self.max_boosts["reChargingSpeed"]
             ):
                 await self._upgrade_boosts(session)
             else:
