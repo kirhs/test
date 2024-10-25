@@ -109,14 +109,15 @@ class NotPXBot:
 
         await self._get_status(session)
 
-        if (
-            self.boost_energyLimit != self.max_boosts["energyLimit"]
-            or self.boost_paintReward != self.max_boosts["paintReward"]
-            or self.boost_reChargingSpeed != self.max_boosts["reChargingSpeed"]
-        ):
-            await self._upgrade_boosts(session)
-        else:
-            logger.info(f"{self.session_name} | All boosts are maxed out!")
+        if settings.UPGRADE_BOOSTS:
+            if (
+                self.boost_energyLimit != self.max_boosts["energyLimit"]
+                or self.boost_paintReward != self.max_boosts["paintReward"]
+                or self.boost_reChargingSpeed != self.max_boosts["reChargingSpeed"]
+            ):
+                await self._upgrade_boosts(session)
+            else:
+                logger.info(f"{self.session_name} | All boosts are maxed out!")
 
         if not await self._check_my(session):
             await self._set_template(session)
