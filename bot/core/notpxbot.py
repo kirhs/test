@@ -2,7 +2,7 @@ import asyncio
 import json
 import traceback
 from datetime import datetime
-from random import randint, choice
+from random import choice, randint
 from time import time
 from typing import Dict, List
 from urllib.parse import parse_qs, quote, unquote
@@ -25,6 +25,23 @@ class NotPXBot:
         self.telegram_client = telegram_client
         self.session_name = telegram_client.name
         self.headers = self._create_headers()
+        self.max_boosts = {"paintReward": 7, "reChargingSpeed": 11, "energyLimit": 7}
+        self.boost_prices = {
+            "paintReward": {2: 5, 3: 100, 4: 200, 5: 300, 6: 500, 7: 600},
+            "reChargingSpeed": {
+                2: 5,
+                3: 100,
+                4: 200,
+                5: 300,
+                6: 400,
+                7: 500,
+                8: 600,
+                9: 700,
+                10: 800,
+                11: 900,
+            },
+            "energyLimit": {2: 5, 3: 100, 4: 200, 5: 300, 6: 400, 7: 10},
+        }
 
     def _create_headers(self):
         base_headers = {
@@ -89,6 +106,17 @@ class NotPXBot:
         await self._get_me(session)
 
         await self._send_tganalytics_event(session)
+
+        await self._get_status(session)
+
+        if (
+            self.boost_energyLimit != self.max_boosts["energyLimit"]
+            or self.boost_paintReward != self.max_boosts["paintReward"]
+            or self.boost_reChargingSpeed != self.max_boosts["reChargingSpeed"]
+        ):
+            await self._upgrade_boosts(session)
+        else:
+            logger.info(f"{self.session_name} | All boosts are maxed out!")
 
         if not await self._check_my(session):
             await self._set_template(session)
@@ -219,11 +247,7 @@ class NotPXBot:
                 "https://notpx.app/api/v1/users/me", headers=self.headers["notpx"]
             )
             response.raise_for_status()
-            response_json = await response.json()
 
-            logger.info(
-                f"{self.session_name} | Successfully logged in | Balance: {response_json['balance']} | League: {response_json['league']}"
-            )
         except Exception as error:
             if attempts <= 3:
                 logger.info(
@@ -410,13 +434,11 @@ class NotPXBot:
             response.raise_for_status()
             response_json = await response.json()
 
-            self.template_id = response_json["id"]
-            self.template_url = response_json["url"]
-            self.template_x = response_json["x"]
-            self.template_y = response_json["y"]
-            self.template_image_size = response_json["imageSize"]
-
-            print(response_json)
+            self.template_id = response_json.get("id")
+            self.template_url = response_json.get("url")
+            self.template_x = response_json.get("x")
+            self.template_y = response_json.get("y")
+            self.template_image_size = response_json.get("imageSize")
 
             response = await session.put(
                 f"https://notpx.app/api/v1/image/template/subscribe/{self.template_id}",
@@ -450,17 +472,15 @@ class NotPXBot:
                 headers=self.headers["notpx"],
             )
             if response.status == 404:
-                print(f"Получил статус {response.status}")
                 return False
             elif response.status == 200:
-                print(f"Получил статус {response.status}")
                 response_json = await response.json()
 
-                self.template_id = response_json["templateId"]
-                self.template_url = response_json["url"]
-                self.template_x = response_json["x"]
-                self.template_y = response_json["y"]
-                self.template_image_size = response_json["imageSize"]
+                self.template_id = response_json.get("templateId")
+                self.template_url = response_json.get("url")
+                self.template_x = response_json.get("x")
+                self.template_y = response_json.get("y")
+                self.template_image_size = response_json.get("imageSize")
                 return True
             else:
                 response.raise_for_status()
@@ -474,6 +494,103 @@ class NotPXBot:
             raise Exception(
                 f"{self.session_name} | Error while checking my | {error or 'Unknown error'}"
             )
+
+    async def _get_status(
+        self, session: aiohttp.ClientSession, attempts: int = 1
+    ) -> None:
+        try:
+            response = await session.get(
+                "https://notpx.app/api/v1/mining/status", headers=self.headers["notpx"]
+            )
+            response.raise_for_status()
+
+            response_json = await response.json()
+            self.boost_energyLimit = response_json.get("boosts", {}).get("energyLimit")
+            self.boost_paintReward = response_json.get("boosts", {}).get("paintReward")
+            self.boost_reChargeSpeed = response_json.get("boosts", {}).get(
+                "reChargeSpeed"
+            )
+            self.balance = response_json.get("userBalance")
+            self.league = response_json.get("league")
+
+            logger.info(
+                f"{self.session_name} | Successfully logged in | Balance: {self.balance} | League: {self.league.capitalize()}"
+            )
+
+        except Exception as error:
+            if attempts <= 3:
+                logger.info(
+                    f"{self.session_name} | Failed to get status, retrying in 5 seconds | Attempts: {attempts}"
+                )
+                await asyncio.sleep(5)
+                return await self._get_status(session=session, attempts=attempts + 1)
+            raise Exception(
+                f"{self.session_name} | Error while getting status | {error or 'Unknown error'}"
+            )
+
+    async def _upgrade_boosts(
+        self, session: aiohttp.ClientSession, attempts: int = 1
+    ) -> None:
+        boost_order = ["energyLimit", "paintReward", "reChargeSpeed"]
+
+        try:
+            plausible_payload = await self._create_plausible_payload(
+                "https://app.notpx.app/claiming"
+            )
+            await self._send_plausible_event(session, plausible_payload)
+
+            while True:
+                for boost_type in boost_order:
+                    current_boost = getattr(self, f"boost_{boost_type}")
+                    if current_boost < self.max_boosts[boost_type]:
+                        if await self._upgrade_boost(session, boost_type):
+                            break
+                        return
+                else:
+                    return
+
+        except Exception as error:
+            if attempts < 3:
+                logger.info(
+                    f"{self.session_name} | Failed to upgrade boosts, retrying in 5 seconds | Attempts: {attempts}"
+                )
+                await asyncio.sleep(5)
+                await self._upgrade_boosts(session=session, attempts=attempts + 1)
+            else:
+                raise Exception(
+                    f"{self.session_name} | Error while upgrading boosts | {error or 'Unknown error'}"
+                )
+
+    async def _upgrade_boost(self, session, boost_type) -> bool:
+        url = f"https://notpx.app/api/v1/mining/boost/check/{boost_type}"
+
+        if (
+            self.balance
+            < self.boost_prices[boost_type][getattr(self, f"boost_{boost_type}") + 1]
+        ):
+            logger.info(
+                f"{self.session_name} | Not enough balance to upgrade {boost_type.capitalize()}!"
+            )
+            return False
+
+        response = await session.get(url, headers=self.headers["notpx"])
+        response.raise_for_status()
+        response_json = await response.json()
+
+        if not response_json.get(boost_type):
+            raise Exception(
+                f"{self.session_name} | Could not upgrade {boost_type.capitalize()} for some reason | {response_json}"
+            )
+
+        old_boost = getattr(self, f"boost_{boost_type}")
+        setattr(self, f"boost_{boost_type}", old_boost + 1)
+        self.balance -= self.boost_prices[boost_type][
+            getattr(self, f"boost_{boost_type}")
+        ]
+        logger.info(
+            f"{self.session_name} | Successfully leveled up {boost_type.capitalize()}! | LVL.{old_boost} -> LVL.{old_boost + 1}"
+        )
+        return True
 
     def _handle_error(self, error) -> None:
         logger.error(f"{self.session_name} | {error or 'Something went wrong'}")
