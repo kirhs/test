@@ -1,17 +1,16 @@
-from __future__ import annotations
-
 import asyncio
 import base64
-from datetime import datetime, timedelta
 import json
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Self
 from uuid import uuid4
 
 import aiohttp
-from attr import define, field
 import jwt
 from aiohttp import ClientSession, ClientWebSocketResponse, WSMsgType
+from attr import define, field
 
+from bot.core.canvas_updater.dynamic_canvas_renderer import DynamicCanvasRenderer
 from bot.core.canvas_updater.exceptions import (
     CentrifugeError,
     SessionErrors,
@@ -43,7 +42,7 @@ class SessionData:
         aiohttp_session: ClientSession,
         websocket_token: Optional[str] = None,
         proxy_connector: Optional[str] = None,
-    ) -> SessionData:
+    ) -> Self:
         """Factory method to create a new session."""
         return cls(
             id=uuid4().hex,
@@ -61,7 +60,7 @@ class WebSocketManager:
 
     REFRESH_TOKEN_IF_NEEDED_INTERVAL = 60  # seconds
     MAX_RECONNECT_ATTEMPTS = 3  # after initial attempt
-    RECONNECT_DELAY = 5  # seconds
+    RETRY_DELAY = 5  # seconds
 
     _instance = None
 
@@ -69,7 +68,6 @@ class WebSocketManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-        
 
     def __init__(
         self, token_endpoint: str, websocket_url: str, canvas_endpoint: str
@@ -81,7 +79,7 @@ class WebSocketManager:
         self.active_session: Optional[SessionData] = None
         self.websocket: Optional[ClientWebSocketResponse] = None
         self.websocket_token: Optional[str] = None
-        self.image_notpx: Optional[bytes] = None
+        self.canvas_renderer = DynamicCanvasRenderer()
         self._lock = asyncio.Lock()
         self._running = False
         self._refresh_task: Optional[asyncio.Task] = None
@@ -140,7 +138,9 @@ class WebSocketManager:
     async def _switch_to_next_session(self) -> None:
         """Switch to the next available session in the list."""
         if not self.sessions:
-            raise SessionErrors.NoAvailableSessionsError("Can not switch to next session, no sessions available")
+            raise SessionErrors.NoAvailableSessionsError(
+                "Can not switch to next session, no sessions available"
+            )
 
         current_index = (
             next(
@@ -170,9 +170,17 @@ class WebSocketManager:
     async def _initialize_connection(self) -> None:
         """Initialize the WebSocket connection."""
         try:
+            if not self.active_session:
+                raise SessionErrors.NoActiveSessionError("No active session available")
+
             if not self.websocket_token:
                 self.websocket_token = await self._get_token()
-            await self._get_image()
+
+            await self.canvas_renderer.retrieve_image(
+                self.active_session.aiohttp_session,
+                self.active_session.image_notpx_headers,
+            )
+
             await self._connect_websocket()
 
             if not self._refresh_task or self._refresh_task.done():
@@ -183,12 +191,6 @@ class WebSocketManager:
         except Exception:
             await self.stop()
             raise Exception("Failed to initialize connection")
-
-    async def _get_image(self) -> None:
-        """Get the image from the server."""
-        if not self.active_session:
-            raise ValueError("No active session available")
-        pass
 
     async def _get_token(self, attempts: int = 1) -> str:
         """Get a new WebSocket token."""
@@ -206,9 +208,9 @@ class WebSocketManager:
         except Exception:
             if attempts <= self.MAX_RECONNECT_ATTEMPTS:
                 logger.warning(
-                    f"WebSocketManager | Token retrieval attempt {attempts} failed, retrying in {self.RECONNECT_DELAY}s"
+                    f"WebSocketManager | Token retrieval attempt {attempts} failed, retrying in {self.RETRY_DELAY}s"
                 )
-                await asyncio.sleep(self.RECONNECT_DELAY)
+                await asyncio.sleep(self.RETRY_DELAY)
                 return await self._get_token(attempts + 1)
             raise TokenError("Failed to get token")
 
@@ -228,8 +230,8 @@ class WebSocketManager:
                 ) as websocket:
                     self.websocket = websocket
                     await self._handle_websocket_connection()
-        except Exception as error:
-            await self._handle_websocket_connection_error(error, attempts)
+        except Exception:
+            await self._handle_websocket_connection_error(attempts)
 
     async def _reconnect_websocket(self) -> None:
         """Reconnect to the WebSocket server."""
@@ -272,9 +274,7 @@ class WebSocketManager:
         stdout, stderr = await decoded_message.communicate()
 
         if stderr:
-            raise CentrifugeError(
-                "Error while decoding websocket message"
-            )
+            raise CentrifugeError("Error while decoding websocket message")
 
         if stdout:
             await self._handle_websocket_message(stdout.decode().strip())
@@ -303,16 +303,14 @@ class WebSocketManager:
 
         return stdout
 
-    async def _handle_websocket_connection_error(
-        self, error: Exception, attempts: int
-    ) -> None:
+    async def _handle_websocket_connection_error(self, attempts: int) -> None:
         try:
             """Handle WebSocket connection errors with retry logic."""
             if attempts <= self.MAX_RECONNECT_ATTEMPTS:
                 logger.warning(
-                    f"WebSocketManager | WebSocket connection attempt {attempts} failed, retrying in {self.RECONNECT_DELAY}s"
+                    f"WebSocketManager | WebSocket connection attempt {attempts} failed, retrying in {self.RETRY_DELAY}s"
                 )
-                await asyncio.sleep(self.RECONNECT_DELAY)
+                await asyncio.sleep(self.RETRY_DELAY)
                 await self._connect_websocket(attempts + 1)
             else:
                 raise WebSocketErrors.ConnectionError(
@@ -362,7 +360,7 @@ class WebSocketManager:
                 await asyncio.sleep(self.REFRESH_TOKEN_IF_NEEDED_INTERVAL)
             except Exception as error:
                 logger.error(f"WebSocketManager | Token refresh error | {error}")
-                await asyncio.sleep(self.RECONNECT_DELAY)
+                await asyncio.sleep(self.RETRY_DELAY)
 
     def _is_token_expired(self) -> bool:
         """Check if the current token is expired or about to expire."""

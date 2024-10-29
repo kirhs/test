@@ -76,6 +76,7 @@ class NotPXBot:
             "tganalytics": create_headers(),
             "plausible": create_headers({"Sec-Fetch-Site": "cross-site"}),
             "websocket": create_headers(websocket_headers),
+            "image_notpx": create_headers(),
         }
 
     async def run(self, user_agent: str, proxy: str | None) -> NoReturn:
