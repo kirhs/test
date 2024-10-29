@@ -5,7 +5,7 @@ const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
 
 async function main() {
-    await d2601c1d81d312e2edcccde782150cce47a66c30.wasm_init("bot/core/task_solver/magic.wasm");
+    await d2601c1d81d312e2edcccde782150cce47a66c30.wasm_init("bot/core/poh_solver/magic.wasm");
 
     const input = process.argv[2];
     if (!input) {

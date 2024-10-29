@@ -124,19 +124,19 @@ yarl = ">=1.12.0,<2.0"
 speedups = ["Brotli", "aiodns (>=3.2.0)", "brotlicffi"]
 
 [[package]]
-name = "aiohttp-proxy"
-version = "0.1.2"
-description = "Full-featured proxy connector for aiohttp"
+name = "aiohttp-socks"
+version = "0.9.0"
+description = "Proxy connector for aiohttp"
 optional = false
 python-versions = "*"
 files = [
-    {file = "aiohttp_proxy-0.1.2-py3-none-any.whl", hash = "sha256:b955ab883d30fd5452f6b226f0b416fc3905cc5e2b3f023b481e95664ef40667"},
-    {file = "aiohttp_proxy-0.1.2.tar.gz", hash = "sha256:4da16face2df486329f7eef36719da5c2ac7136e756574de06b428c5793b8090"},
+    {file = "aiohttp_socks-0.9.0-py3-none-any.whl", hash = "sha256:90a8211fd5b904ccbd010900105f1fd2dab20ae8a07df508df399036ad8d3d88"},
+    {file = "aiohttp_socks-0.9.0.tar.gz", hash = "sha256:22159a1af026b229cfe5ea007e065bb3fe56385a951a82623a6f4588a6758003"},
 ]
 
 [package.dependencies]
-aiohttp = ">=2.3.2"
-yarl = "*"
+aiohttp = ">=3.10.0"
+python-socks = {version = ">=2.4.3,<3.0.0", extras = ["asyncio"]}
 
 [[package]]
 name = "aiosignal"
@@ -752,6 +752,23 @@ toml = ["tomli (>=2.0.1)"]
 yaml = ["pyyaml (>=6.0.1)"]
 
 [[package]]
+name = "pyjwt"
+version = "2.9.0"
+description = "JSON Web Token implementation in Python"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "PyJWT-2.9.0-py3-none-any.whl", hash = "sha256:3b02fb0f44517787776cf48f2ae25d8e14f300e6d7545a4315cee571a415e850"},
+    {file = "pyjwt-2.9.0.tar.gz", hash = "sha256:7e1e5b56cc735432a7369cbfa0efe50fa113ebecdc04ae6922deba8b84582d0c"},
+]
+
+[package.extras]
+crypto = ["cryptography (>=3.4.0)"]
+dev = ["coverage[toml] (==5.0.4)", "cryptography (>=3.4.0)", "pre-commit", "pytest (>=6.0.0,<7.0.0)", "sphinx", "sphinx-rtd-theme", "zope.interface"]
+docs = ["sphinx", "sphinx-rtd-theme", "zope.interface"]
+tests = ["coverage[toml] (==5.0.4)", "pytest (>=6.0.0,<7.0.0)"]
+
+[[package]]
 name = "pyrogram"
 version = "2.0.106"
 description = "Elegant, modern and asynchronous Telegram MTProto API framework in Python for users and bots"
@@ -791,6 +808,26 @@ files = [
 
 [package.extras]
 cli = ["click (>=5.0)"]
+
+[[package]]
+name = "python-socks"
+version = "2.4.4"
+description = "Core proxy (SOCKS4, SOCKS5, HTTP tunneling) functionality for Python"
+optional = false
+python-versions = "*"
+files = [
+    {file = "python-socks-2.4.4.tar.gz", hash = "sha256:e5a8e4f78203612c813946feacd87b98943965a04389fe221fa1e9ab263ad22e"},
+    {file = "python_socks-2.4.4-py3-none-any.whl", hash = "sha256:fda465d3ef229119ee614eb85f2b7c0ad28be6dd40e0ef8dd317c49e8725e514"},
+]
+
+[package.dependencies]
+async-timeout = {version = ">=3.0.1", optional = true, markers = "extra == \"asyncio\""}
+
+[package.extras]
+anyio = ["anyio (>=3.3.4,<5.0.0)"]
+asyncio = ["async-timeout (>=3.0.1)"]
+curio = ["curio (>=1.4)"]
+trio = ["trio (>=0.16.0)"]
 
 [[package]]
 name = "tgcrypto"
@@ -987,4 +1024,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "ba28e767c2e8c10cc4af691d0e96877fadc35fd8c04e29474f85ef6b1a0667d9"
+content-hash = "9e49a42b232e8256066ba81cb3b6416b861464127bf1963e9c3bfbed2d6396d4"

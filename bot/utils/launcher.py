@@ -61,7 +61,10 @@ async def run_tasks(accounts: List[Dict[str, str]]) -> None:
             )
             proxy = Proxy.from_str(proxy=raw_proxy).as_url if raw_proxy else None
 
-            start_delay = randint(settings.INITIAL_START_DELAY_SECONDS[0], settings.INITIAL_START_DELAY_SECONDS[1])
+            start_delay = randint(
+                settings.INITIAL_START_DELAY_SECONDS[0],
+                settings.INITIAL_START_DELAY_SECONDS[1],
+            )
 
             tasks.append(
                 asyncio.create_task(
@@ -73,8 +76,8 @@ async def run_tasks(accounts: List[Dict[str, str]]) -> None:
                     )
                 )
             )
+
+        await asyncio.gather(*tasks, return_exceptions=True)
     except Exception as error:
         logger.error(f"{error or 'Something went wrong'}")
         dev_logger.error(f"{traceback.format_exc()}")
-
-    await asyncio.gather(*tasks)

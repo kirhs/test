@@ -9,3 +9,4 @@ logs/*
 accounts.json
 sessions/*
 !sessions/.gitkeep
+node_modules

@@ -1,15 +1,16 @@
 import asyncio
 import json
+import sys
 import traceback
 from datetime import datetime
 from random import choice, randint
 from time import time
-from typing import Dict, List
+from typing import Dict, List, NoReturn
 from urllib.parse import parse_qs, quote, unquote
 from uuid import uuid4
 
 import aiohttp
-from aiohttp_proxy import ProxyConnector
+from aiohttp_socks import ProxyConnector
 from better_proxy import Proxy
 from pyrogram.client import Client
 from pyrogram.errors import AuthKeyUnregistered, Unauthorized, UserDeactivated
@@ -17,13 +18,15 @@ from pyrogram.raw.functions.messages.request_app_web_view import RequestAppWebVi
 from pyrogram.raw.types.input_bot_app_short_name import InputBotAppShortName
 
 from bot.config.config import settings
+from bot.core.canvas_updater.websocket_manager import WebSocketManager
 from bot.utils.logger import dev_logger, logger
 
 
 class NotPXBot:
-    def __init__(self, telegram_client: Client):
+    def __init__(self, telegram_client: Client, websocket_manager: WebSocketManager):
         self.telegram_client = telegram_client
         self.session_name = telegram_client.name
+        self.websocket_manager = websocket_manager
         self.headers = self._create_headers()
         self.max_boosts = {"paintReward": 7, "reChargingSpeed": 11, "energyLimit": 7}
         self.boost_prices = {
@@ -53,40 +56,59 @@ class NotPXBot:
             "Sec-Fetch-Site": "same-site",
             "User-Agent": "",
         }
-        return {
-            "notpx": {**base_headers, "Authorization": ""},
-            "tganalytics": base_headers.copy(),
-            "plausible": {**base_headers, "Sec-Fetch-Site": "cross-site"},
+
+        websocket_headers = {
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Sec-Fetch-Dest": "websocket",
+            "Sec-Fetch-Mode": "websocket",
+            "Sec-Fetch-Site": "same-site",
         }
 
-    async def run(self, user_agent: str, proxy: str | None):
+        def create_headers(additional_headers=None):
+            headers = base_headers.copy()
+            if additional_headers:
+                headers.update(additional_headers)
+            return headers
+
+        return {
+            "notpx": create_headers({"Authorization": ""}),
+            "tganalytics": create_headers(),
+            "plausible": create_headers({"Sec-Fetch-Site": "cross-site"}),
+            "websocket": create_headers(websocket_headers),
+        }
+
+    async def run(self, user_agent: str, proxy: str | None) -> NoReturn:
         for header in self.headers.values():
             header["User-Agent"] = user_agent
 
         self.proxy = proxy
-        proxy_connection = ProxyConnector().from_url(proxy) if proxy else None
+        proxy_connector = ProxyConnector().from_url(proxy) if proxy else None
 
-        async with aiohttp.ClientSession(connector=proxy_connection) as session:
-            if proxy:
-                await self._proxy_checker(session, proxy)
+        async with aiohttp.ClientSession(connector=proxy_connector) as session:
+            try:
+                if proxy:
+                    await self._proxy_checker(session, proxy)
 
-            while True:
-                try:
+                while True:
                     await self._execute_main_loop(session)
-                except Exception as error:
-                    self._handle_error(error)
-                    logger.info(f"{self.session_name} | Retrying in 60 seconds")
-                    await asyncio.sleep(60)
+            except Exception as error:
+                handle_error(self.session_name, error)
+                logger.info(f"{self.session_name} | Retrying in 60 seconds")
+                await asyncio.sleep(60)
 
     async def _proxy_checker(self, session: aiohttp.ClientSession, proxy: str):
         try:
             response = await session.get(
                 "https://ipinfo.io/ip", timeout=aiohttp.ClientTimeout(10)
             )
+            response.raise_for_status()
             ip = await response.text()
+
             logger.info(f"{self.session_name} | Proxy connected | IP: {ip}")
-        except Exception as error:
-            raise Exception(f"Proxy: {proxy} | {error or 'Unknown error'}")
+        except Exception:
+            logger.info(f"{self.session_name} | Proxy error | {proxy}")
+            raise Exception(f"{self.session_name} | Proxy error | {proxy}")
 
     async def _execute_main_loop(self, session: aiohttp.ClientSession):
         if settings.SLEEP_AT_NIGHT:
@@ -100,14 +122,32 @@ class NotPXBot:
 
         self.headers["notpx"]["Authorization"] = f"initData {telegram_web_data}"
 
+        await self._send_tganalytics_event(session)
+
         plausible_payload = await self._create_plausible_payload(self.auth_url)
         await self._send_plausible_event(session, plausible_payload)
 
-        await self._get_me(session)
+        about_me_data = await self._get_me(session)
 
-        await self._send_tganalytics_event(session)
+        websocket_token = about_me_data.get("websocketToken")
 
         await self._get_status(session)
+
+        if not await self._check_my(session):
+            await self._set_template(session)
+
+        websocket_task = asyncio.create_task(
+            self.websocket_manager.add_session(
+                notpx_headers=self.headers["notpx"],
+                websocket_headers=self.headers["websocket"],
+                image_notpx_headers=self.headers["notpx"],
+                aiohttp_session=session,
+                raw_proxy=self.proxy,
+                websocket_token=websocket_token,
+            )
+        )
+
+        websocket_task.add_done_callback(handle_task_completion)
 
         if settings.UPGRADE_BOOSTS:
             if (
@@ -117,17 +157,14 @@ class NotPXBot:
             ):
                 await self._upgrade_boosts(session)
             else:
-                logger.info(f"{self.session_name} | All boosts are maxed out!")
-
-        if not await self._check_my(session):
-            await self._set_template(session)
+                logger.info(f"{self.session_name} | All boosts are maxed out")
 
         if settings.CLAIM_PX:
             await self._claim_px(session)
 
         sleep_time = (
             randint(
-                settings.SLEEP_INTERVAL_MINUTES[0], settings.SLEEP_INTERVAL_MINUTES[1]
+                settings.ITERATION_SLEEP_MINUTES[0], settings.ITERATION_SLEEP_MINUTES[1]
             )
             * 60
         )
@@ -137,7 +174,7 @@ class NotPXBot:
         )
         await asyncio.sleep(sleep_time)
 
-    async def _handle_night_sleep(self):
+    async def _handle_night_sleep(self) -> None:
         current_hour = datetime.now().hour
         start_night_time = randint(
             settings.NIGHT_START_HOURS[0], settings.NIGHT_START_HOURS[1]
@@ -161,7 +198,7 @@ class NotPXBot:
 
     async def _get_telegram_web_data(
         self, peer_id: str, short_name: str, start_param: str
-    ):
+    ) -> str:
         try:
             if self.proxy:
                 proxy = Proxy.from_str(self.proxy)
@@ -203,16 +240,19 @@ class NotPXBot:
                 await self.telegram_client.disconnect()
 
             return init_data
-        except Exception as error:
+        except Exception:
+            logger.exception(
+                f"{self.session_name} | Error while getting telegram web data"
+            )
             raise Exception(
-                f"{self.session_name} | Error while getting telegram web data | {error or 'Unknown error'}"
+                f"{self.session_name} | Error while getting telegram web data"
             )
 
     async def _connect_telegram_client(self):
         try:
             await self.telegram_client.connect()
         except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
-            logger.error(f"{self.session_name} | Invalid")
+            logger.error(f"{self.session_name} | Invalid session")
             raise
 
     def _set_user_data(self, query_params, peer_id):
@@ -242,23 +282,26 @@ class NotPXBot:
             else ""
         )
 
-    async def _get_me(self, session: aiohttp.ClientSession, attempts: int = 1) -> None:
+    async def _get_me(
+        self, session: aiohttp.ClientSession, attempts: int = 1
+    ) -> Dict[str, str]:
         try:
             response = await session.get(
                 "https://notpx.app/api/v1/users/me", headers=self.headers["notpx"]
             )
             response.raise_for_status()
+            response_json = await response.json()
 
-        except Exception as error:
+            return response_json
+
+        except Exception:
             if attempts <= 3:
-                logger.info(
+                logger.warning(
                     f"{self.session_name} | Failed to get info about me, retrying in 5 seconds | Attempts: {attempts}"
                 )
                 await asyncio.sleep(5)
                 return await self._get_me(session=session, attempts=attempts + 1)
-            raise Exception(
-                f"{self.session_name} | Error while getting info about me | {error or 'Unknown error'}"
-            )
+            raise Exception(f"{self.session_name} | Error while getting info about me")
 
     async def _send_tganalytics_event(
         self, session: aiohttp.ClientSession, attempts: int = 1
@@ -291,9 +334,9 @@ class NotPXBot:
             response.raise_for_status()
 
             logger.info(f"{self.session_name} | Sent tganalytics event")
-        except Exception as error:
+        except Exception:
             if attempts <= 3:
-                logger.info(
+                logger.warning(
                     f"{self.session_name} | Failed to send tganalytics event, retrying in 5 seconds | Attempts: {attempts}"
                 )
                 await asyncio.sleep(5)
@@ -301,7 +344,7 @@ class NotPXBot:
                     session=session, attempts=attempts + 1
                 )
             raise Exception(
-                f"{self.session_name} | Error while sending tganalytics event | {error or 'Unknown error'}"
+                f"{self.session_name} | Error while sending tganalytics event"
             )
 
     def _create_tganalytics_payload(self, random_event_delay) -> List[Dict[str, str]]:
@@ -340,9 +383,9 @@ class NotPXBot:
             )
             response.raise_for_status()
             logger.info(f"{self.session_name} | Plausible event sent")
-        except Exception as error:
+        except Exception:
             if attempts <= 3:
-                logger.info(
+                logger.warning(
                     f"{self.session_name} | Failed to send plausible event, retrying in 5 seconds | Attempts: {attempts}"
                 )
                 await asyncio.sleep(5)
@@ -350,7 +393,7 @@ class NotPXBot:
                     session=session, payload=payload, attempts=attempts + 1
                 )
             raise Exception(
-                f"{self.session_name} | Error while sending plausible event | {error or 'Unknown error'}"
+                f"{self.session_name} | Error while sending plausible event"
             )
 
     async def _create_plausible_payload(self, url: str) -> Dict[str, str | None]:
@@ -360,7 +403,7 @@ class NotPXBot:
         try:
             process = await asyncio.create_subprocess_exec(
                 "node",
-                "bot/core/task_solver/main.js",
+                "bot/core/poh_solver/main.js",
                 task,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -371,10 +414,8 @@ class NotPXBot:
                     f"{self.session_name} | Error while solving task | {stderr.decode('utf-8').strip()}"
                 )
             return stdout.decode("utf-8").strip()
-        except Exception as error:
-            raise Exception(
-                f"{self.session_name} | Error while solving task | {error or 'Unknown error'}"
-            )
+        except Exception:
+            raise Exception(f"{self.session_name} | Unknown error while solving task")
 
     async def _claim_px(
         self, session: aiohttp.ClientSession, attempts: int = 1
@@ -399,16 +440,14 @@ class NotPXBot:
                 "https://app.notpx.app/"
             )
             await self._send_plausible_event(session, plausible_payload)
-        except Exception as error:
+        except Exception:
             if attempts <= 3:
-                logger.info(
+                logger.warning(
                     f"{self.session_name} | Failed to claim px, retrying in 5 seconds | Attempts: {attempts}"
                 )
                 await asyncio.sleep(5)
                 return await self._claim_px(session=session, attempts=attempts + 1)
-            raise Exception(
-                f"{self.session_name} | Error while claiming px | {error or 'Unknown error'}"
-            )
+            raise Exception(f"{self.session_name} | Error while claiming px")
 
     async def _set_template(
         self, session: aiohttp.ClientSession, attempts: int = 1
@@ -453,20 +492,18 @@ class NotPXBot:
                 "https://app.notpx.app/"
             )
             await self._send_plausible_event(session, plausible_payload)
-        except Exception as error:
+        except Exception:
             if attempts <= 3:
-                logger.info(
+                logger.warning(
                     f"{self.session_name} | Failed to change template, retrying in 5 seconds | Attempts: {attempts}"
                 )
                 await asyncio.sleep(5)
                 return await self._set_template(session=session, attempts=attempts + 1)
-            raise Exception(
-                f"{self.session_name} | Error while changing template | {error or 'Unknown error'}"
-            )
+            raise Exception(f"{self.session_name} | Error while changing template")
 
     async def _check_my(
         self, session: aiohttp.ClientSession, attempts: int = 1
-    ) -> bool:
+    ) -> bool | None:
         try:
             response = await session.get(
                 "https://notpx.app/api/v1/image/template/my",
@@ -485,16 +522,14 @@ class NotPXBot:
                 return True
             else:
                 response.raise_for_status()
-        except Exception as error:
+        except Exception:
             if attempts <= 3:
-                logger.info(
+                logger.warning(
                     f"{self.session_name} | Failed to check my, retrying in 5 seconds | Attempts: {attempts}"
                 )
                 await asyncio.sleep(5)
                 return await self._check_my(session=session, attempts=attempts + 1)
-            raise Exception(
-                f"{self.session_name} | Error while checking my | {error or 'Unknown error'}"
-            )
+            raise Exception(f"{self.session_name} | Error while checking my")
 
     async def _get_status(
         self, session: aiohttp.ClientSession, attempts: int = 1
@@ -518,16 +553,14 @@ class NotPXBot:
                 f"{self.session_name} | Successfully logged in | Balance: {self.balance} | League: {self.league.capitalize()}"
             )
 
-        except Exception as error:
+        except Exception:
             if attempts <= 3:
-                logger.info(
+                logger.warning(
                     f"{self.session_name} | Failed to get status, retrying in 5 seconds | Attempts: {attempts}"
                 )
                 await asyncio.sleep(5)
                 return await self._get_status(session=session, attempts=attempts + 1)
-            raise Exception(
-                f"{self.session_name} | Error while getting status | {error or 'Unknown error'}"
-            )
+            raise Exception(f"{self.session_name} | Error while getting status")
 
     async def _upgrade_boosts(
         self, session: aiohttp.ClientSession, attempts: int = 1
@@ -550,17 +583,15 @@ class NotPXBot:
                 else:
                     return
 
-        except Exception as error:
+        except Exception:
             if attempts < 3:
-                logger.info(
+                logger.warning(
                     f"{self.session_name} | Failed to upgrade boosts, retrying in 5 seconds | Attempts: {attempts}"
                 )
                 await asyncio.sleep(5)
                 await self._upgrade_boosts(session=session, attempts=attempts + 1)
             else:
-                raise Exception(
-                    f"{self.session_name} | Error while upgrading boosts | {error or 'Unknown error'}"
-                )
+                raise Exception(f"{self.session_name} | Error while upgrading boosts")
 
     async def _upgrade_boost(self, session, boost_type) -> bool:
         url = f"https://notpx.app/api/v1/mining/boost/check/{boost_type}"
@@ -570,7 +601,7 @@ class NotPXBot:
             < self.boost_prices[boost_type][getattr(self, f"boost_{boost_type}") + 1]
         ):
             logger.info(
-                f"{self.session_name} | Not enough balance to upgrade {boost_type.capitalize()}!"
+                f"{self.session_name} | Not enough balance to upgrade {boost_type.capitalize()}"
             )
             return False
 
@@ -593,20 +624,49 @@ class NotPXBot:
         )
         return True
 
-    def _handle_error(self, error) -> None:
-        logger.error(f"{self.session_name} | {error or 'Something went wrong'}")
-        dev_logger.error(f"{self.session_name} | {traceback.format_exc()}")
+
+def handle_task_completion(task: asyncio.Task) -> None:
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception as error:
+        logger.error(f"{error.__str__() or 'Something went wrong'}")
+        dev_logger.error(f"{traceback.format_exc()}")
+        sys.exit(1)
+
+
+def handle_error(session_name, error: Exception) -> None:
+    logger.error(f"{session_name} | {error.__str__() or 'Something went wrong'}")
+    dev_logger.error(f"{session_name} | {traceback.format_exc()}")
 
 
 async def run_notpxbot(
-    telegram_client: Client, user_agent: str, proxy: str | None, start_delay: int
+    telegram_client: Client,
+    user_agent: str,
+    proxy: str | None,
+    start_delay: int,
 ) -> None:
+    websocket_manager = None
     try:
+        websocket_manager = WebSocketManager(
+            token_endpoint="https://notpx.app/api/v1/users/me",
+            websocket_url="wss://notpx.app/connection/websocket",
+            canvas_endpoint="empy",
+        )
         logger.info(f"{telegram_client.name} | Starting in {start_delay} seconds")
         await asyncio.sleep(start_delay)
-        await NotPXBot(telegram_client=telegram_client).run(
-            user_agent=user_agent, proxy=proxy
-        )
+
+        await NotPXBot(
+            telegram_client=telegram_client, websocket_manager=websocket_manager
+        ).run(user_agent=user_agent, proxy=proxy)
     except Exception as error:
-        logger.error(f"{telegram_client.name} | {error or 'Something went wrong'}")
-        dev_logger.error(f"{telegram_client.name} | {traceback.format_exc()}")
+        handle_error(telegram_client.name, error)
+    finally:
+        if telegram_client.is_connected:
+            await telegram_client.disconnect()
+
+        if websocket_manager and websocket_manager._running:
+            await websocket_manager.stop()
+
+        logger.info(f"{telegram_client.name} | Stopped")
