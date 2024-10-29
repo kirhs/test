@@ -612,7 +612,7 @@ class NotPXBot:
 
         if not response_json.get(boost_type):
             raise Exception(
-                f"{self.session_name} | Could not upgrade {boost_type.capitalize()} for some reason | {response_json}"
+                f"{self.session_name} | Couldn't retrieve {boost_type.capitalize} from response json while upgrading boost"
             )
 
         old_boost = getattr(self, f"boost_{boost_type}")
