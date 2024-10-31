@@ -9,7 +9,7 @@ class WebSocketErrors(Exception):
 
         def __init__(self, message: str = "WebSocket server closed connection") -> None:
             super().__init__(message)
-    
+
     class AuthenticationError(Exception):
         """Raised when the WebSocket authentication fails."""
 
@@ -52,11 +52,4 @@ class TokenError(Exception):
     """Base exception for token-related errors."""
 
     def __init__(self, message: str = "Unknown token error") -> None:
-        super().__init__(message)
-
-
-class CentrifugeError(Exception):
-    """Base exception for Centrifuge-related errors."""
-
-    def __init__(self, message: str = "Unknown Centrifuge error") -> None:
         super().__init__(message)

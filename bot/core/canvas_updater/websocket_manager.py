@@ -1,6 +1,4 @@
 import asyncio
-import base64
-import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Self
 from uuid import uuid4
@@ -10,9 +8,9 @@ import jwt
 from aiohttp import ClientSession, ClientWebSocketResponse, WSMsgType
 from attr import define, field
 
+from bot.core.canvas_updater.centrifuge import decode_message, encode_commands
 from bot.core.canvas_updater.dynamic_canvas_renderer import DynamicCanvasRenderer
 from bot.core.canvas_updater.exceptions import (
-    CentrifugeError,
     SessionErrors,
     TokenError,
     WebSocketErrors,
@@ -59,7 +57,7 @@ class WebSocketManager:
     """Manages WebSocket connections and sessions."""
 
     REFRESH_TOKEN_IF_NEEDED_INTERVAL = 60  # seconds
-    MAX_RECONNECT_ATTEMPTS = 3  # after initial attempt
+    MAX_RECONNECT_ATTEMPTS = 0  # after initial attempt
     RETRY_DELAY = 5  # seconds
 
     _instance = None
@@ -226,7 +224,6 @@ class WebSocketManager:
                     headers=self.active_session.websocket_headers,
                     proxy=self.active_session.proxy_connector,
                     protocols=["centrifuge-protobuf"],
-                    autoping=False,
                 ) as websocket:
                     self.websocket = websocket
                     await self._handle_websocket_connection()
@@ -247,8 +244,12 @@ class WebSocketManager:
                 "WebSocket connection not established"
             )
 
-        auth_data = await self._authenticate_websocket()
-        await self.websocket.send_bytes(base64.b64decode(auth_data))
+        auth_command = [
+            {"connect": {"token": self.websocket_token, "name": "js"}, "id": 1}
+        ]
+        encoded_auth_command = encode_commands(auth_command)
+
+        await self.websocket.send_bytes(encoded_auth_command)
 
         while True:
             try:
@@ -257,51 +258,23 @@ class WebSocketManager:
                     raise WebSocketErrors.ServerClosedConnectionError(
                         "WebSocket server closed connection"
                     )
-                await self._decode_websocket_message(message.data)
+                if message.data == b"\x00":
+                    await self.websocket.send_bytes(b"\x00")
+                    continue
+
+                await self._handle_websocket_message(decode_message(message.data))
             except Exception:
                 raise WebSocketErrors.ConnectionError("WebSocket connection failed")
 
-    async def _decode_websocket_message(self, message_data: bytes) -> None:
-        """Decode a WebSocket message."""
-        decoded_message = await asyncio.create_subprocess_exec(
-            "node",
-            "bot/core/canvas_updater/centrifuge.js",
-            base64.b64encode(message_data).decode(),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+    async def _handle_websocket_message(self, message) -> None:
+        """Handle a decoded WebSocket message."""
+        if self.websocket is None:
+            raise WebSocketErrors.NoConnectionError("No WebSocket connection available")
 
-        stdout, stderr = await decoded_message.communicate()
+        if not message:
+            return
 
-        if stderr:
-            raise CentrifugeError("Error while decoding websocket message")
-
-        if stdout:
-            await self._handle_websocket_message(stdout.decode().strip())
-
-    async def _authenticate_websocket(self) -> bytes:
-        """Authenticate the WebSocket connection."""
-        auth_command = json.dumps(
-            [{"connect": {"token": self.websocket_token, "name": "js"}, "id": 1}]
-        )
-
-        process = await asyncio.create_subprocess_exec(
-            "node",
-            "bot/core/canvas_updater/centrifuge.js",
-            f"command:{auth_command}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        stdout, stderr = await process.communicate()
-        if stderr:
-            raise WebSocketErrors.AuthenticationError(
-                "Error while authenticating WebSocket connection"
-            )
-        if not stdout:
-            raise WebSocketErrors.AuthenticationError("No authentication data received")
-
-        return stdout
+        await self.canvas_renderer.update_canvas(message)
 
     async def _handle_websocket_connection_error(self, attempts: int) -> None:
         try:
@@ -322,20 +295,6 @@ class WebSocketManager:
             )
             await self.stop()
             raise
-
-    async def _handle_websocket_message(self, message: str) -> None:
-        """Handle a decoded WebSocket message."""
-        if self.websocket is None:
-            raise WebSocketErrors.NoConnectionError("No WebSocket connection available")
-
-        if message == "null":
-            await self.websocket.send_bytes(b"\x00")
-        else:
-            await self._handle_image(message)
-
-    async def _handle_image(self, message: str) -> None:
-        """Handle an image message."""
-        pass
 
     async def _refresh_token_if_needed(self) -> None:
         """Refresh the token if it's expired or about to expire."""
