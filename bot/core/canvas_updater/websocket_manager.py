@@ -1,4 +1,6 @@
 import asyncio
+import sys
+import traceback
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Self
 from uuid import uuid4
@@ -15,7 +17,7 @@ from bot.core.canvas_updater.exceptions import (
     TokenError,
     WebSocketErrors,
 )
-from bot.utils.logger import logger
+from bot.utils.logger import dev_logger, logger
 
 
 @define
@@ -131,7 +133,8 @@ class WebSocketManager:
         self.active_session = session
         session.active = True
         self._running = True
-        await self._initialize_connection()
+        websocket_task = asyncio.create_task(self._initialize_connection())
+        websocket_task.add_done_callback(handle_task_completion)
 
     async def _switch_to_next_session(self) -> None:
         """Switch to the next available session in the list."""
@@ -342,3 +345,14 @@ class WebSocketManager:
             self._refresh_task.cancel()
         if self.websocket:
             await self.websocket.close()
+
+
+def handle_task_completion(task: asyncio.Task) -> None:
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception as error:
+        logger.error(f"{error.__str__() or 'WebSocketManager | Something went wrong'}")
+        dev_logger.error(f"{traceback.format_exc()}")
+        sys.exit(1)

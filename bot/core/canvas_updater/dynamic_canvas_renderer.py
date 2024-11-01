@@ -165,12 +165,26 @@ class DynamicCanvasRenderer:
                 canvas_array[pixel_index + 2] = rgb_color[2]
                 canvas_array[pixel_index + 3] = 255
 
+    @property
+    def get_canvas(self) -> np.ndarray:
+        return self._canvas
+
     @lru_cache(maxsize=1024)
     def _pixel_id_to_xy(self, pixel_id: int) -> Tuple[int, int]:
         x = (pixel_id - 1) % self.CANVAS_SIZE
         y = (pixel_id - 1) // self.CANVAS_SIZE
         return x, y
 
+    @lru_cache(maxsize=1024)
+    def _xy_to_pixel_id(self, x: int, y: int) -> int:
+        return y * self.CANVAS_SIZE + x + 1
+
     @lru_cache(maxsize=256)
     def _hex_to_rgb(self, hex_color: str) -> Tuple[int, ...]:
         return tuple(int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
+
+    @lru_cache(maxsize=256)
+    def rgba_to_hex(self, rgba) -> str:
+        r, g, b, a = rgba
+        hex_color = f'#{r:02X}{g:02X}{b:02X}'
+        return hex_color

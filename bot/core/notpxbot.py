@@ -1,23 +1,27 @@
 import asyncio
+import io
 import json
-import sys
+import random
 import traceback
 from datetime import datetime
 from random import choice, randint
 from time import time
-from typing import Dict, List, NoReturn
+from typing import Dict, List, NoReturn, Tuple
 from urllib.parse import parse_qs, quote, unquote
 from uuid import uuid4
 
 import aiohttp
+import numpy as np
 from aiohttp_socks import ProxyConnector
 from better_proxy import Proxy
+from PIL import Image
 from pyrogram.client import Client
 from pyrogram.errors import AuthKeyUnregistered, Unauthorized, UserDeactivated
 from pyrogram.raw.functions.messages.request_app_web_view import RequestAppWebView
 from pyrogram.raw.types.input_bot_app_short_name import InputBotAppShortName
 
 from bot.config.config import settings
+from bot.core.canvas_updater.dynamic_canvas_renderer import DynamicCanvasRenderer
 from bot.core.canvas_updater.websocket_manager import WebSocketManager
 from bot.utils.logger import dev_logger, logger
 
@@ -28,10 +32,10 @@ class NotPXBot:
         self.session_name = telegram_client.name
         self.websocket_manager = websocket_manager
         self.headers = self._create_headers()
-        self.max_boosts = {"paintReward": 7, "reChargingSpeed": 11, "energyLimit": 7}
+        self.max_boosts = {"paintReward": 7, "reChargeSpeed": 11, "energyLimit": 7}
         self.boost_prices = {
             "paintReward": {2: 5, 3: 100, 4: 200, 5: 300, 6: 500, 7: 600},
-            "reChargingSpeed": {
+            "reChargeSpeed": {
                 2: 5,
                 3: 100,
                 4: 200,
@@ -45,6 +49,7 @@ class NotPXBot:
             },
             "energyLimit": {2: 5, 3: 100, 4: 200, 5: 300, 6: 400, 7: 10},
         }
+        self._canvas_renderer = DynamicCanvasRenderer()
 
     def _create_headers(self):
         base_headers = {
@@ -137,28 +142,29 @@ class NotPXBot:
         if not await self._check_my(session):
             await self._set_template(session)
 
-        websocket_task = asyncio.create_task(
-            self.websocket_manager.add_session(
-                notpx_headers=self.headers["notpx"],
-                websocket_headers=self.headers["websocket"],
-                image_notpx_headers=self.headers["notpx"],
-                aiohttp_session=session,
-                raw_proxy=self.proxy,
-                websocket_token=websocket_token,
-            )
+        await self.websocket_manager.add_session(
+            notpx_headers=self.headers["notpx"],
+            websocket_headers=self.headers["websocket"],
+            image_notpx_headers=self.headers["notpx"],
+            aiohttp_session=session,
+            raw_proxy=self.proxy,
+            websocket_token=websocket_token,
         )
-
-        websocket_task.add_done_callback(handle_task_completion)
 
         if settings.UPGRADE_BOOSTS:
             if (
                 self.boost_energyLimit != self.max_boosts["energyLimit"]
                 or self.boost_paintReward != self.max_boosts["paintReward"]
-                or self.boost_reChargeSpeed != self.max_boosts["reChargingSpeed"]
+                or self.boost_reChargeSpeed != self.max_boosts["reChargeSpeed"]
             ):
                 await self._upgrade_boosts(session)
             else:
                 logger.info(f"{self.session_name} | All boosts are maxed out")
+
+        while not self.websocket_manager.websocket:
+            await asyncio.sleep(1)
+
+        await self._paint_pixels(session)
 
         if settings.CLAIM_PX:
             await self._claim_px(session)
@@ -479,7 +485,7 @@ class NotPXBot:
             self.template_url = response_json.get("url")
             self.template_x = response_json.get("x")
             self.template_y = response_json.get("y")
-            self.template_image_size = response_json.get("imageSize")
+            self.template_size = response_json.get("imageSize")
 
             response = await session.put(
                 f"https://notpx.app/api/v1/image/template/subscribe/{self.template_id}",
@@ -519,7 +525,7 @@ class NotPXBot:
                 self.template_url = response_json.get("url")
                 self.template_x = response_json.get("x")
                 self.template_y = response_json.get("y")
-                self.template_image_size = response_json.get("imageSize")
+                self.template_size = response_json.get("imageSize")
                 return True
             else:
                 response.raise_for_status()
@@ -549,6 +555,7 @@ class NotPXBot:
             )
             self.balance = response_json.get("userBalance")
             self.league = response_json.get("league")
+            self._charges = response_json.get("charges")
 
             logger.info(
                 f"{self.session_name} | Successfully logged in | Balance: {self.balance} | League: {self.league.capitalize()}"
@@ -625,20 +632,119 @@ class NotPXBot:
         )
         return True
 
+    def _process_arrays(
+        self, template_image: Image.Image
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        template_array = np.array(template_image)
+        canvas_array = self._canvas_renderer.get_canvas
 
-def handle_task_completion(task: asyncio.Task) -> None:
-    try:
-        task.result()
-    except asyncio.CancelledError:
-        pass
-    except Exception as error:
-        logger.error(f"{error.__str__() or 'Something went wrong'}")
-        dev_logger.error(f"{traceback.format_exc()}")
-        sys.exit(1)
+        template_2d = template_array.reshape(
+            (self.template_size, self.template_size, 4)
+        )
+        canvas_2d = canvas_array.reshape(
+            (self._canvas_renderer.CANVAS_SIZE, self._canvas_renderer.CANVAS_SIZE, 4)
+        )
+
+        return template_2d, canvas_2d
+
+    async def _paint_pixel(
+        self,
+        session: aiohttp.ClientSession,
+        canvas_x: int,
+        canvas_y: int,
+        template_pixel: np.ndarray,
+    ) -> None:
+        """Paint a single pixel and handle the response."""
+
+        template_pixel_hex = self._canvas_renderer.rgba_to_hex(
+            tuple(template_pixel.flatten().tolist())
+        )
+        canvas_pixel_id = self._canvas_renderer._xy_to_pixel_id(canvas_x, canvas_y)
+
+        payload = {
+            "pixelId": canvas_pixel_id,
+            "newColor": template_pixel_hex,
+        }
+
+        async with session.post(
+            "https://notpx.app/api/v1/repaint/start",
+            headers=self.headers["notpx"],
+            json=payload,
+        ) as response:
+            response.raise_for_status()
+            self._charges -= 1
+
+            response_json = await response.json()
+            new_balance = response_json.get("balance")
+
+            if new_balance > self.balance:
+                balance_increase = new_balance - self.balance
+                logger.info(
+                    f"{self.session_name} | Successfully painted pixel | +{balance_increase} PX"
+                )
+                self.balance = new_balance
+                return
+
+            logger.info(
+                f"{self.session_name} | Failed to paint pixel | Current balance: {self.balance}"
+            )
+
+    async def _paint_pixels(
+        self, session: aiohttp.ClientSession, attempts: int = 0
+    ) -> None:
+        try:
+            response = await session.get(
+                self.template_url, headers=self.headers["image_notpx"]
+            )
+            response.raise_for_status()
+
+            template_from_response = Image.open(io.BytesIO(await response.read()))
+            template_from_response = template_from_response.convert("RGBA")
+            template_2d, canvas_2d = self._process_arrays(template_from_response)
+
+            for ty in range(self.template_size):
+                if self._charges <= 0:
+                    break
+
+                for tx in range(self.template_size):
+                    if self._charges <= 0:
+                        break
+
+                    canvas_x = self.template_x + tx
+                    canvas_y = self.template_y + ty
+
+                    template_pixel = template_2d[ty, tx]
+                    canvas_pixel = canvas_2d[canvas_y, canvas_x]
+
+                    if template_pixel[3] == 0:
+                        continue
+
+                    if not np.array_equal(template_pixel, canvas_pixel):
+                        await self._paint_pixel(
+                            session=session,
+                            canvas_x=canvas_x,
+                            canvas_y=canvas_y,
+                            template_pixel=template_pixel,
+                        )
+                        await asyncio.sleep(random.uniform(0.95, 2.3))
+
+        except Exception as e:
+            if attempts <= 1:
+                logger.warning(
+                    f"{self.session_name} | Failed to paint pixel, retrying in 5 seconds | Attempts: {attempts + 1}"
+                )
+                await asyncio.sleep(5)
+                await self._paint_pixels(session=session, attempts=attempts + 1)
+            else:
+                raise Exception(
+                    f"{self.session_name} | Max retry attempts reached while painting pixels: {str(e)}"
+                )
 
 
 def handle_error(session_name, error: Exception) -> None:
-    logger.error(f"{session_name} | {error.__str__() or 'Something went wrong'}")
+    logger.error(
+        f"{session_name} | {error.__str__() or 'NotPXBot | Something went wrong'}"
+    )
     dev_logger.error(f"{session_name} | {traceback.format_exc()}")
 
 
