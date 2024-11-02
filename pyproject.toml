@@ -21,10 +21,8 @@ pyjwt = "^2.9.0"
 aiohttp-socks = "^0.9.0"
 protobuf = "^5.28.3"
 numpy = "^2.1.2"
+pillow = "^11.0.0"
 
-
-[tool.poetry.group.dev.dependencies]
-vermin = "^1.6.0"
 
 [build-system]
 requires = ["poetry-core"]

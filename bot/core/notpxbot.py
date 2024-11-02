@@ -469,7 +469,7 @@ class NotPXBot:
             random_template = choice(response_json)
 
             response = await session.get(
-                f"https://notpx.app/api/v1/image/template/{random_template["templateId"]}",
+                f"https://notpx.app/api/v1/image/template/{random_template['templateId']}",
                 headers=self.headers["notpx"],
             )
             response.raise_for_status()
