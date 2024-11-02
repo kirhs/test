@@ -24,9 +24,6 @@ numpy = "^2.1.2"
 pillow = "^11.0.0"
 
 
-[tool.poetry.group.dev.dependencies]
-vermin = "^1.6.0"
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
