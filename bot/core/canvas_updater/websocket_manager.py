@@ -1,12 +1,10 @@
 import asyncio
 import sys
-from time import time
 import traceback
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Self
 from uuid import uuid4
 
-import aiohttp
 import jwt
 from aiohttp import ClientSession, ClientWebSocketResponse, WSMsgType
 from attr import define, field
@@ -81,6 +79,7 @@ class WebSocketManager:
         self._lock = asyncio.Lock()
         self._running = False
         self._refresh_task: Optional[asyncio.Task] = None
+        self._connection_attempts = 1
 
     async def add_session(
         self,
@@ -211,7 +210,7 @@ class WebSocketManager:
                 return await self._get_token(attempts + 1)
             raise TokenError("Failed to get token")
 
-    async def _connect_websocket(self, attempts: int = 1) -> None:
+    async def _connect_websocket(self) -> None:
         """Establish WebSocket connection."""
         if not self.active_session:
             raise SessionErrors.NoActiveSessionError("No active session available")
@@ -229,7 +228,7 @@ class WebSocketManager:
                 )
                 await self._handle_websocket_connection()
         except Exception:
-            await self._handle_websocket_connection_error(attempts)
+            await self._handle_websocket_connection_error()
 
     async def _reconnect_websocket(self) -> None:
         """Reconnect to the WebSocket server."""
@@ -275,21 +274,26 @@ class WebSocketManager:
 
         if not message:
             return
+        
+        if self._connection_attempts > 1:
+            dev_logger.info("WebSocketManager | Connection established, reset connection attempts to 1")
+            self._connection_attempts = 1
 
         await self.canvas_renderer.update_canvas(message)
 
-    async def _handle_websocket_connection_error(self, attempts: int) -> None:
+    async def _handle_websocket_connection_error(self) -> None:
         try:
             """Handle WebSocket connection errors with retry logic."""
-            if attempts <= self.MAX_RECONNECT_ATTEMPTS:
+            if self._connection_attempts <= self.MAX_RECONNECT_ATTEMPTS:
                 logger.warning(
-                    f"WebSocketManager | WebSocket connection attempt {attempts} failed, retrying in {self.RETRY_DELAY}s"
+                    f"WebSocketManager | WebSocket connection attempt {self._connection_attempts} failed, retrying in {self.RETRY_DELAY}s"
                 )
                 await asyncio.sleep(self.RETRY_DELAY)
-                await self._connect_websocket(attempts + 1)
+                self._connection_attempts += 1
+                await self._connect_websocket()
             else:
                 raise WebSocketErrors.ConnectionError(
-                    f"WebSocket connection failed after {attempts} attempts"
+                    f"WebSocket connection failed after {self._connection_attempts} attempts"
                 )
         except (asyncio.exceptions.CancelledError, KeyboardInterrupt):
             logger.warning(

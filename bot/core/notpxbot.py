@@ -6,7 +6,7 @@ import traceback
 from datetime import datetime
 from random import choice, randint
 from time import time
-from typing import Dict, List, NoReturn, Tuple
+from typing import Dict, List, NoReturn
 from urllib.parse import parse_qs, quote, unquote
 from uuid import uuid4
 
@@ -18,9 +18,9 @@ from PIL import Image
 from pyrogram.client import Client
 from pyrogram.errors import (
     AuthKeyUnregistered,
+    FloodWait,
     Unauthorized,
     UserDeactivated,
-    FloodWait,
 )
 from pyrogram.raw.functions.messages.request_app_web_view import RequestAppWebView
 from pyrogram.raw.types.input_bot_app_short_name import InputBotAppShortName
@@ -97,16 +97,16 @@ class NotPXBot:
         proxy_connector = ProxyConnector().from_url(proxy) if proxy else None
 
         async with aiohttp.ClientSession(connector=proxy_connector) as session:
-            try:
-                if proxy:
-                    await self._proxy_checker(session, proxy)
+            while True:
+                try:
+                    if proxy:
+                        await self._proxy_checker(session, proxy)
 
-                while True:
-                    await self._execute_main_loop(session)
-            except Exception as error:
-                handle_error(self.session_name, error)
-                logger.info(f"{self.session_name} | Retrying in 60 seconds")
-                await asyncio.sleep(60)
+                        await self._execute_main_loop(session)
+                except Exception as error:
+                    handle_error(self.session_name, error)
+                    logger.info(f"{self.session_name} | Retrying in 60 seconds")
+                    await asyncio.sleep(60)
 
     async def _proxy_checker(self, session: aiohttp.ClientSession, proxy: str):
         try:
