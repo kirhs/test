@@ -58,10 +58,10 @@ class AccountsManager:
             else:
                 logger.warning(f"Session {session_name} not found in accounts.json")
                 user_response = input(
-                    f"Do you want to add session {session_name} to accounts.json? (y/n): "
+                    f"Do you want to add session {session_name} to accounts.json? [Y/n]: "
                 )
 
-                if user_response.lower() == "y":
+                if not user_response or user_response.lower() == "y":
                     await register_sessions(session_name=session_name)
                     available_accounts.append(session_name)
 

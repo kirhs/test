@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from pyrogram.client import Client
 
 from bot.config.config import settings
-from bot.core.useragent_gen import generate_user_agent
+from bot.utils.ua_generator import generate_user_agent
 from bot.utils.json_manager import JsonManager
 from bot.utils.logger import dev_logger, logger
 
