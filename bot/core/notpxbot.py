@@ -152,7 +152,6 @@ class NotPXBot:
             websocket_headers=self.headers["websocket"],
             image_notpx_headers=self.headers["notpx"],
             aiohttp_session=session,
-            raw_proxy=self.proxy,
             websocket_token=websocket_token,
         )
 

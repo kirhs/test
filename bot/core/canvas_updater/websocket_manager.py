@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from time import time
 import traceback
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Self
@@ -30,7 +31,6 @@ class SessionData:
     image_notpx_headers: Dict[str, str] = field()
     aiohttp_session: ClientSession = field()
     websocket_token: Optional[str] = field(default=None)
-    proxy_connector: Optional[str] = field(default=None)
     active: bool = field(default=False)
 
     @classmethod
@@ -41,7 +41,6 @@ class SessionData:
         image_notpx_headers: Dict[str, str],
         aiohttp_session: ClientSession,
         websocket_token: Optional[str] = None,
-        proxy_connector: Optional[str] = None,
     ) -> Self:
         """Factory method to create a new session."""
         return cls(
@@ -51,7 +50,6 @@ class SessionData:
             image_notpx_headers=image_notpx_headers,
             aiohttp_session=aiohttp_session,
             websocket_token=websocket_token,
-            proxy_connector=proxy_connector,
         )
 
 
@@ -59,7 +57,7 @@ class WebSocketManager:
     """Manages WebSocket connections and sessions."""
 
     REFRESH_TOKEN_IF_NEEDED_INTERVAL = 60  # seconds
-    MAX_RECONNECT_ATTEMPTS = 0  # after initial attempt
+    MAX_RECONNECT_ATTEMPTS = 3  # after initial attempt
     RETRY_DELAY = 5  # seconds
 
     _instance = None
@@ -91,7 +89,6 @@ class WebSocketManager:
         image_notpx_headers: Dict[str, str],
         aiohttp_session: ClientSession,
         websocket_token: Optional[str] = None,
-        raw_proxy: Optional[str] = None,
     ) -> None:
         """Add a new session to the manager."""
         async with self._lock:
@@ -105,7 +102,6 @@ class WebSocketManager:
                 image_notpx_headers=image_notpx_headers,
                 aiohttp_session=aiohttp_session,
                 websocket_token=websocket_token,
-                proxy_connector=raw_proxy,
             )
 
             self.sessions.append(session)
@@ -221,15 +217,17 @@ class WebSocketManager:
             raise SessionErrors.NoActiveSessionError("No active session available")
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.ws_connect(
-                    self.websocket_url,
-                    headers=self.active_session.websocket_headers,
-                    proxy=self.active_session.proxy_connector,
-                    protocols=["centrifuge-protobuf"],
-                ) as websocket:
-                    self.websocket = websocket
-                    await self._handle_websocket_connection()
+            async with self.active_session.aiohttp_session.ws_connect(
+                self.websocket_url,
+                headers=self.active_session.websocket_headers,
+                protocols=["centrifuge-protobuf"],
+            ) as websocket:
+                self.websocket = websocket
+                peername = websocket.get_extra_info("peername")
+                logger.info(
+                    f"WebSocketManager | WebSocket connection established | IP: {peername[0]}"
+                )
+                await self._handle_websocket_connection()
         except Exception:
             await self._handle_websocket_connection_error(attempts)
 
@@ -257,6 +255,7 @@ class WebSocketManager:
         while True:
             try:
                 message = await self.websocket.receive()
+
                 if message.type == WSMsgType.CLOSE:
                     raise WebSocketErrors.ServerClosedConnectionError(
                         "WebSocket server closed connection"
