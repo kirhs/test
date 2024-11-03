@@ -16,7 +16,12 @@ from aiohttp_socks import ProxyConnector
 from better_proxy import Proxy
 from PIL import Image
 from pyrogram.client import Client
-from pyrogram.errors import AuthKeyUnregistered, Unauthorized, UserDeactivated
+from pyrogram.errors import (
+    AuthKeyUnregistered,
+    Unauthorized,
+    UserDeactivated,
+    FloodWait,
+)
 from pyrogram.raw.functions.messages.request_app_web_view import RequestAppWebView
 from pyrogram.raw.types.input_bot_app_short_name import InputBotAppShortName
 
@@ -204,7 +209,7 @@ class NotPXBot:
             )
 
     async def _get_telegram_web_data(
-        self, peer_id: str, short_name: str, start_param: str
+        self, peer_id: str, short_name: str, start_param: str, attempt: int = 1
     ) -> str:
         try:
             if self.proxy:
@@ -247,10 +252,27 @@ class NotPXBot:
                 await self.telegram_client.disconnect()
 
             return init_data
-        except Exception:
-            logger.exception(
+        except FloodWait as error:
+            if attempt <= 3:
+                logger.warning(
+                    f"{self.session_name} | Rate limit exceeded. Will retry in {error.value} seconds"
+                )
+                await asyncio.sleep(error.value)  # type: ignore
+                return await self._get_telegram_web_data(
+                    peer_id, short_name, start_param, attempt + 1
+                )
+            raise Exception(
                 f"{self.session_name} | Error while getting telegram web data"
             )
+        except Exception:
+            if attempt <= 3:
+                logger.warning(
+                    f"{self.session_name} | Failed to get telegram web data, retrying in 5 seconds | Attempts: {attempt}"
+                )
+                await asyncio.sleep(5)
+                return await self._get_telegram_web_data(
+                    peer_id, short_name, start_param, attempt + 1
+                )
             raise Exception(
                 f"{self.session_name} | Error while getting telegram web data"
             )
@@ -632,21 +654,6 @@ class NotPXBot:
         )
         return True
 
-    def _process_arrays(
-        self, template_image: Image.Image
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        template_array = np.array(template_image)
-        canvas_array = self._canvas_renderer.get_canvas
-
-        template_2d = template_array.reshape(
-            (self.template_size, self.template_size, 4)
-        )
-        canvas_2d = canvas_array.reshape(
-            (self._canvas_renderer.CANVAS_SIZE, self._canvas_renderer.CANVAS_SIZE, 4)
-        )
-
-        return template_2d, canvas_2d
-
     async def _paint_pixel(
         self,
         session: aiohttp.ClientSession,
@@ -700,7 +707,10 @@ class NotPXBot:
 
             template_from_response = Image.open(io.BytesIO(await response.read()))
             template_from_response = template_from_response.convert("RGBA")
-            template_2d, canvas_2d = self._process_arrays(template_from_response)
+            template_array = np.array(template_from_response)
+            template_2d = template_array.reshape(
+                (self.template_size, self.template_size, 4)
+            )
 
             for ty in range(self.template_size):
                 if self._charges <= 0:
@@ -709,6 +719,15 @@ class NotPXBot:
                 for tx in range(self.template_size):
                     if self._charges <= 0:
                         break
+
+                    canvas_array = self._canvas_renderer.get_canvas
+                    canvas_2d = canvas_array.reshape(
+                        (
+                            self._canvas_renderer.CANVAS_SIZE,
+                            self._canvas_renderer.CANVAS_SIZE,
+                            4,
+                        )
+                    )
 
                     canvas_x = self.template_x + tx
                     canvas_y = self.template_y + ty
