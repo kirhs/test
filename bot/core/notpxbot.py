@@ -168,7 +168,8 @@ class NotPXBot:
         while not self.websocket_manager.websocket:
             await asyncio.sleep(1)
 
-        await self._paint_pixels(session)
+        if settings.PAINT_PIXELS:
+            await self._paint_pixels(session)
 
         if settings.CLAIM_PX:
             await self._claim_px(session)
