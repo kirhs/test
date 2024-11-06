@@ -80,7 +80,7 @@ Automated script for NotPixelBot with painting on the template, passing in-game 
 
 ### ✨ Capybara Intro (game changer, killer feature)
 
-![Capybara Intro](https://github.com/Dellenoam/NotPixelBot/tree/master/assets/Capybara_Intro.gif)
+![Capybara Intro](https://github.com/Dellenoam/NotPixelBot/blob/master/assets/Capybara_Intro.gif)
 
 ### 📝 Shortly about in-game events check
 
@@ -236,7 +236,7 @@ copy .env-example .env  # Specify your API_ID and API_HASH, the rest is taken by
 
 ## Run the script
 
-![NotPixel Intro](https://github.com/Dellenoam/NotPixelBot/tree/master/assets/NotPixel_Intro.gif)
+![NotPixel Intro](https://github.com/Dellenoam/NotPixelBot/blob/master/assets/NotPixel_Intro.gif)
 
 You can run the script with `python3 main.py` if you are inside the `NotPixelBot` folder
 
