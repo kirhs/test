@@ -152,6 +152,7 @@ class NotPXBot:
             websocket_headers=self.headers["websocket"],
             image_notpx_headers=self.headers["notpx"],
             aiohttp_session=session,
+            session_name=self.session_name,
             websocket_token=websocket_token,
         )
 
@@ -692,7 +693,7 @@ class NotPXBot:
                 self.balance = new_balance
                 return
 
-            logger.info(
+            logger.warning(
                 f"{self.session_name} | Failed to paint pixel | Current balance: {self.balance}"
             )
 
@@ -738,7 +739,7 @@ class NotPXBot:
                     if template_pixel[3] == 0:
                         continue
 
-                    if not np.array_equal(template_pixel, canvas_pixel):
+                    if not np.array_equal(template_pixel[:3], canvas_pixel[:3]):
                         await self._paint_pixel(
                             session=session,
                             canvas_x=canvas_x,
@@ -778,7 +779,6 @@ async def run_notpxbot(
         websocket_manager = WebSocketManager(
             token_endpoint="https://notpx.app/api/v1/users/me",
             websocket_url="wss://notpx.app/connection/websocket",
-            canvas_endpoint="empy",
         )
         logger.info(f"{telegram_client.name} | Starting in {start_delay} seconds")
         await asyncio.sleep(start_delay)
@@ -795,4 +795,4 @@ async def run_notpxbot(
         if websocket_manager and websocket_manager._running:
             await websocket_manager.stop()
 
-        logger.info(f"{telegram_client.name} | Stopped")
+        logger.warning(f"{telegram_client.name} | Stopped")
