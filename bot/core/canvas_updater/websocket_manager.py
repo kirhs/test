@@ -3,7 +3,6 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Self
-from uuid import uuid4
 
 import jwt
 from aiohttp import ClientSession, ClientWebSocketResponse, WSMsgType
@@ -167,11 +166,6 @@ class WebSocketManager:
             if not self.websocket_token:
                 self.websocket_token = await self._get_token()
 
-            await self.canvas_renderer.retrieve_image(
-                self.active_session.aiohttp_session,
-                self.active_session.image_notpx_headers,
-            )
-
             if not self._refresh_task or self._refresh_task.done():
                 self._refresh_task = asyncio.create_task(self._token_refresh_loop())
 
@@ -211,6 +205,11 @@ class WebSocketManager:
         if not self.active_session:
             raise SessionErrors.NoActiveSessionError("No active session available")
 
+        await self.canvas_renderer.retrieve_image(
+            self.active_session.aiohttp_session,
+            self.active_session.image_notpx_headers,
+        )
+
         try:
             async with self.active_session.aiohttp_session.ws_connect(
                 self.websocket_url,
@@ -226,16 +225,13 @@ class WebSocketManager:
         except Exception:
             await self._handle_websocket_connection_error()
         finally:
-            logger.warning(
-                "WebSocketManager | Stopping..."
-            )
+            logger.warning("WebSocketManager | Stopping...")
             await self.stop()
 
     async def _reconnect_websocket(self) -> None:
         """Reconnect to the WebSocket server."""
         if self.websocket is not None:
             await self.websocket.close()
-        self.websocket = None
         await self._connect_websocket()
 
     async def _handle_websocket_connection(self) -> None:
@@ -319,8 +315,9 @@ class WebSocketManager:
             try:
                 await self._refresh_token_if_needed()
                 await asyncio.sleep(self.REFRESH_TOKEN_IF_NEEDED_INTERVAL)
-            except Exception as error:
-                logger.error(f"WebSocketManager | Token refresh error | {error}")
+            except Exception:
+                logger.error("WebSocketManager | Token refresh error")
+                dev_logger.error(f"{traceback.format_exc()}")
                 await asyncio.sleep(self.RETRY_DELAY)
 
     def _is_token_expired(self) -> bool:
