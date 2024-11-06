@@ -763,7 +763,7 @@ class NotPXBot:
 
 def handle_error(session_name, error: Exception) -> None:
     logger.error(
-        f"{session_name} | {error.__str__() or 'NotPXBot | Something went wrong'}"
+        f"{error.__str__() or 'NotPXBot | Something went wrong'}"
     )
     dev_logger.error(f"{session_name} | {traceback.format_exc()}")
 
