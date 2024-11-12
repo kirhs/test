@@ -66,18 +66,21 @@ async def run_tasks(accounts: List[Dict[str, str]]) -> None:
                 settings.INITIAL_START_DELAY_SECONDS[1],
             )
 
-            tasks.append(
-                asyncio.create_task(
-                    run_notpxbot(
-                        telegram_client=telegram_client,
-                        user_agent=user_agent,
-                        proxy=proxy,
-                        start_delay=start_delay,
-                    )
+            task = asyncio.create_task(
+                run_notpxbot(
+                    telegram_client=telegram_client,
+                    user_agent=user_agent,
+                    proxy=proxy,
+                    start_delay=start_delay,
                 )
             )
+            task.set_name(session_name)
 
-        await asyncio.gather(*tasks, return_exceptions=True)
+            tasks.append(
+                task
+            )
+
+        await asyncio.gather(*tasks)
     except Exception as error:
         logger.error(f"{error or 'Something went wrong'}")
         dev_logger.error(f"{traceback.format_exc()}")

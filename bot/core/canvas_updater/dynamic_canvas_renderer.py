@@ -3,11 +3,8 @@ import io
 from functools import lru_cache
 from typing import Any, Dict, List, Self, Tuple
 
-import aiohttp
 import numpy as np
 from PIL import Image
-
-from bot.utils.logger import logger
 
 
 class DynamicCanvasRenderer:
@@ -82,49 +79,38 @@ class DynamicCanvasRenderer:
         )
         self._lock = asyncio.Lock()
 
-    async def retrieve_image(
-        self,
-        session: aiohttp.ClientSession,
-        image_notpx_headers: Dict[str, str],
-        attempts: int = 1,
-    ) -> None:
-        try:
-            async with self._lock:
-                response = await session.get(
-                    "https://image.notpx.app/api/v2/image", headers=image_notpx_headers
-                )
-                response.raise_for_status()
-
-                canvas_from_response = Image.open(io.BytesIO(await response.read()))
-                canvas_from_response = canvas_from_response.convert("RGBA")
-                self._canvas = np.array(canvas_from_response).flatten()
-        except Exception:
-            if attempts <= self.MAX_ATTEMPTS:
-                logger.warning(
-                    f"DynamicCanvasRenderer | Image retrieval attempt {attempts} failed, retrying in {self.RETRY_DELAY}s"
-                )
-                await asyncio.sleep(self.RETRY_DELAY)
-                return await self.retrieve_image(
-                    session=session,
-                    image_notpx_headers=image_notpx_headers,
-                    attempts=attempts + 1,
-                )
-            raise Exception(
-                f"DynamicCanvasRenderer | Image retrieval failed after {attempts} attempts"
-            )
+    async def set_canvas(self, canvas_bytes: bytes) -> None:
+        async with self._lock:
+            canvas = Image.open(io.BytesIO(canvas_bytes)).convert("RGBA")
+            canvas_array = np.array(canvas).flatten()
+            self._canvas = canvas_array
 
     async def update_canvas(
         self,
         pixels_data: Dict[str, Any],
     ) -> None:
-        if pixels_data["channel"] == "event:message":
-            await self._paint_squares(self._canvas, pixels_data["data"])
-        elif pixels_data["channel"] == "pixel:message":
-            await self._paint_pixels(self._canvas, pixels_data["data"])
+        """
+        Updates the canvas with new data from the WebSocket connection only.
+
+        Args:
+            pixels_data (Dict[str, Any]): Data from the WebSocket connection.
+        """
+        async with self._lock:
+            if pixels_data["channel"] == "event:message":
+                await self._paint_squares(self._canvas, pixels_data["data"])
+            elif pixels_data["channel"] == "pixel:message":
+                await self._paint_pixels(self._canvas, pixels_data["data"])
 
     async def _paint_squares(
         self, canvas_array, pixels_data: List[Dict[str, Any]]
     ) -> None:
+        """
+        Paints squares on the canvas based on the given data.
+
+        Args:
+            canvas_array: The numpy array representing the canvas to be modified.
+            pixels_data (List[Dict[str, Any]]): Data from the WebSocket connection.
+        """
         for pixel_data in pixels_data:
             pixel_id: int = pixel_data["pixel"]
             if pixel_id > self.CANVAS_SIZE * self.CANVAS_SIZE:
@@ -150,6 +136,16 @@ class DynamicCanvasRenderer:
                 canvas_array[pixel_index + 3] = 255
 
     async def _paint_pixels(self, canvas_array, pixels_data: Dict[str, Any]) -> None:
+        """
+        Paints individual pixels on the canvas based on the provided data.
+
+        This function skips pixels with a hex color of "#171F2A" and pixels with an ID greater than the canvas size.
+        It converts the hex color to RGB and updates the corresponding pixels in the canvas array.
+
+        Args:
+            canvas_array: The numpy array representing the canvas to be modified.
+            pixels_data (Dict[str, Any]): A dictionary mapping hex color codes to lists of pixel IDs that should be painted with that color.
+        """
         for hex_color, pixels_id in pixels_data.items():
             if hex_color == "#171F2A":
                 continue
@@ -164,6 +160,26 @@ class DynamicCanvasRenderer:
                 canvas_array[pixel_index + 1] = rgb_color[1]
                 canvas_array[pixel_index + 2] = rgb_color[2]
                 canvas_array[pixel_index + 3] = 255
+
+    async def set_pixel(self, pixel_id: int, hex_color: str) -> None:
+        """
+        Sets a single pixel on the canvas to the specified color.
+        Using only when YOU paint on the canvas, not from the WebSocket data
+
+        Args:
+            pixel_id (int): The ID of the pixel to be set.
+            hex_color (str): The hex color to be set. Must be a valid hex color code.
+        """
+        if pixel_id > self.CANVAS_SIZE * self.CANVAS_SIZE:
+            return
+
+        async with self._lock:
+            rgb_color = self._hex_to_rgb(hex_color)
+            pixel_index = (pixel_id - 1) * 4
+            self._canvas[pixel_index] = rgb_color[0]
+            self._canvas[pixel_index + 1] = rgb_color[1]
+            self._canvas[pixel_index + 2] = rgb_color[2]
+            self._canvas[pixel_index + 3] = 255
 
     @property
     def get_canvas(self) -> np.ndarray:
@@ -186,5 +202,5 @@ class DynamicCanvasRenderer:
     @lru_cache(maxsize=256)
     def rgba_to_hex(self, rgba) -> str:
         r, g, b, a = rgba
-        hex_color = f'#{r:02X}{g:02X}{b:02X}'
+        hex_color = f"#{r:02X}{g:02X}{b:02X}"
         return hex_color

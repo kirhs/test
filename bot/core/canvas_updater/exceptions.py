@@ -53,3 +53,10 @@ class TokenError(Exception):
 
     def __init__(self, message: str = "Unknown token error") -> None:
         super().__init__(message)
+    
+
+class UpdateAuthHeaderError(Exception):
+    """Base exception for updating auth header errors."""
+
+    def __init__(self, message: str = "Unknown update auth header error") -> None:
+        super().__init__(message)

@@ -47,7 +47,7 @@ class ProtobufCodec:
         return replies
 
 
-def decode_message(binary_message) -> Dict[str, Any] | None:
+def decode_message(binary_message) -> Dict[str, Any] | bytes | None:
     """Decode centrifuge-protobuf message"""
     codec = ProtobufCodec()
 
@@ -70,6 +70,8 @@ def decode_message(binary_message) -> Dict[str, Any] | None:
                     "data": decoded_data,
                 }
                 return protobuf_message
+        elif reply.connect and reply.connect.data:
+            return reply.connect.data
 
 
 def encode_commands(commands_to_encode) -> bytes:
