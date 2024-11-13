@@ -521,7 +521,7 @@ class NotPXBot:
                     return
 
         except Exception:
-            if attempts < 3:
+            if attempts <= 3:
                 logger.warning(
                     f"{self.session_name} | Failed to upgrade boosts, retrying in 5 seconds | Attempts: {attempts}"
                 )
@@ -606,7 +606,7 @@ class NotPXBot:
             )
 
     async def _paint_pixels(
-        self, session: aiohttp.ClientSession, attempts: int = 0
+        self, session: aiohttp.ClientSession, attempts: int = 1
     ) -> None:
         try:
             response = await session.get(
@@ -657,10 +657,11 @@ class NotPXBot:
                         await asyncio.sleep(random.uniform(0.95, 2.3))
 
         except Exception:
-            if attempts <= 1:
+            if attempts <= 3:
                 logger.warning(
-                    f"{self.session_name} | Failed to paint pixels, retrying in 5 seconds | Attempts: {attempts + 1}"
+                    f"{self.session_name} | Failed to paint pixels, changing template and retrying in 5 seconds | Attempts: {attempts}"
                 )
+                await self._set_template(session)
                 await asyncio.sleep(5)
                 await self._paint_pixels(session=session, attempts=attempts + 1)
             else:
