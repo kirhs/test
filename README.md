@@ -229,7 +229,8 @@ nano .env  # Specify your API_ID and API_HASH, the rest is taken by default
 ```shell
 python -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt
+pip install poetry
+poetry install --only main
 copy .env-example .env
 # Then open .env in any text editor and specify your API_ID and API_HASH, the rest is taken by default
 ```
