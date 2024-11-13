@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "notpixelbot"
-version = "1.1.0"
+version = "1.1.1"
 description = "Bot for automation Not Pixel telegram mini app"
 authors = ["Dellenoam", "YourLov3r"]
 license = "MIT License"
@@ -22,6 +22,7 @@ aiohttp-socks = "^0.9.0"
 protobuf = "^5.28.3"
 numpy = "^2.1.2"
 pillow = "^11.0.0"
+opencv-python = "^4.10.0.84"
 
 
 [build-system]
