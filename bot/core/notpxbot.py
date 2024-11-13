@@ -127,8 +127,8 @@ class NotPXBot:
             )
             response.raise_for_status()
             response_json = await response.json()
-            ip = response_json.get('ip', 'NO')
-            country = response_json.get('country', 'NO')
+            ip = response_json.get('ip', 'Not Found')
+            country = response_json.get('country', 'Not Found')
 
             logger.info(f"{self.session_name} | Proxy connected | IP: {ip} | {country}")
         except Exception:
