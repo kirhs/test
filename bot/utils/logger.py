@@ -5,7 +5,7 @@ import time
 
 import colorlog
 
-logging.Formatter.converter = time.gmtime
+logging.Formatter.converter = time.localtime
 
 logger = logging.getLogger("user_logger")
 logger.setLevel(logging.INFO)
