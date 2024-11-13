@@ -442,7 +442,7 @@ class WebSocketManager:
                 options={"verify_signature": False},
             )
             exp_time = datetime.fromtimestamp(payload["exp"])
-            return datetime.now() + timedelta(minutes=20) >= exp_time
+            return datetime.now() + timedelta(minutes=5) >= exp_time
         except jwt.InvalidTokenError:
             return True
 

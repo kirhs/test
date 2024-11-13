@@ -217,35 +217,44 @@ Sometimes when creating a new application, it may display an error. It is still 
 
 ```shell
 python3 -m venv .venv
-source venv/bin/activate
-pip3 install poetry
+source .venv/bin/activate
+pip install poetry
 poetry install --only main
 cp .env-example .env
 nano .env  # Specify your API_ID and API_HASH, the rest is taken by default
-python3 main.py
 ```
 
 ## Windows manual installation
 
 ```shell
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-copy .env-example .env  # Specify your API_ID and API_HASH, the rest is taken by default
+python -m venv .venv
+.venv\Scripts\activate
+pip install poetry
+poetry install --only main
+copy .env-example .env
+# Then open .env in any text editor and specify your API_ID and API_HASH, the rest is taken by default
 ```
 
 ## Run the script
 
 ![NotPixel Intro](https://github.com/Dellenoam/NotPixelBot/blob/master/assets/NotPixel_Intro.gif)
 
-You can run the script with `python3 main.py` if you are inside the `NotPixelBot` folder
+You can run the script with `python3 main.py` or `python main.py` if you are inside the `NotPixelBot` folder
 
 Also, you can use flag `--action` or `-a` to quickly run the script with specified action.
 
 ```shell
+# Linux
 ~/NotPixelBot >>> python3 main.py --action [1/2]
+# Windows
+~/NotPixelBot >>> python main.py --action [1/2]
+
 # Or
+
+# Linux
 ~/NotPixelBot >>> python3 main.py -a [1/2]
+# Windows
+~/NotPixelBot >>> python main.py -a [1/2]
 ```
 
 Where [1/2] is:
@@ -256,7 +265,10 @@ Where [1/2] is:
 So for example if you want to create a session, you can run this command:
 
 ```shell
+# Linux
 ~/NotPixelBot >>> python3 main.py -a 1
+# Windows
+~/NotPixelBot >>> python main.py -a 1
 ```
 
 ## Contacts
