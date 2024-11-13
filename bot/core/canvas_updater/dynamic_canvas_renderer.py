@@ -113,22 +113,31 @@ class DynamicCanvasRenderer:
         """
         for pixel_data in pixels_data:
             pixel_id: int = pixel_data["pixel"]
-            if pixel_id > self.CANVAS_SIZE * self.CANVAS_SIZE:
-                continue
 
             x, y = self._pixel_id_to_xy(pixel_id)
-            x = x - (getattr(self, f"{pixel_data['type'].upper()}_SIZE") // 2)
-            y = y - (getattr(self, f"{pixel_data['type'].upper()}_SIZE") // 2)
+
+            square_size = getattr(self, f"{pixel_data['type'].upper()}_SIZE")
+            x = x - (square_size // 2)
+            y = y - (square_size // 2)
+
             colors = (
                 self.PUMPKIN_COLORS
                 if pixel_data["type"] == "Pumpkin"
                 else [self.DYNAMITE_COLOR] * (self.DYNAMITE_SIZE * self.DYNAMITE_SIZE)
             )
+
             for i, color in enumerate(colors):
-                px = x + (i % self.CANVAS_SIZE)
-                py = y + (i // self.CANVAS_SIZE)
+                offset_x = i % square_size
+                offset_y = i // square_size
+
+                px = x + offset_x
+                py = y + offset_y
+
+                if px < 0 or py <0 or px >= self.CANVAS_SIZE or py >= self.CANVAS_SIZE:
+                    continue
 
                 rgb_color = self._hex_to_rgb(color)
+
                 pixel_index = (px + py * self.CANVAS_SIZE) * 4
                 canvas_array[pixel_index] = rgb_color[0]
                 canvas_array[pixel_index + 1] = rgb_color[1]
@@ -150,11 +159,12 @@ class DynamicCanvasRenderer:
             if hex_color == "#171F2A":
                 continue
 
+            rgb_color = self._hex_to_rgb(hex_color)
+
             for pixel_id in pixels_id:
                 if pixel_id > self.CANVAS_SIZE * self.CANVAS_SIZE:
                     continue
 
-                rgb_color = self._hex_to_rgb(hex_color)
                 pixel_index = (pixel_id - 1) * 4
                 canvas_array[pixel_index] = rgb_color[0]
                 canvas_array[pixel_index + 1] = rgb_color[1]
@@ -197,7 +207,13 @@ class DynamicCanvasRenderer:
 
     @lru_cache(maxsize=256)
     def _hex_to_rgb(self, hex_color: str) -> Tuple[int, ...]:
-        return tuple(int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
+        color_int = int(hex_color.replace("#", ""), 16)
+
+        red = (color_int >> 16) & 255
+        green = (color_int >> 8) & 255
+        blue = color_int & 255
+
+        return red, green, blue
 
     @lru_cache(maxsize=256)
     def rgba_to_hex(self, rgba) -> str:

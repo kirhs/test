@@ -9,6 +9,7 @@ from typing import Dict, List, NoReturn
 from uuid import uuid4
 
 import aiohttp
+import cv2
 import numpy as np
 from aiohttp_socks import ProxyConnector
 from PIL import Image
@@ -593,7 +594,7 @@ class NotPXBot:
             response_json = await response.json()
             new_balance = response_json.get("balance")
 
-            if new_balance > self.balance:
+            if round(new_balance, 2) > round(self.balance, 2):
                 balance_increase = new_balance - self.balance
                 logger.info(
                     f"{self.session_name} | Successfully painted pixel | +{round(balance_increase, 2)} PX"
@@ -602,7 +603,7 @@ class NotPXBot:
                 return
 
             logger.warning(
-                f"{self.session_name} | Failed to paint pixel | Current balance: {round(self.balance, 2)} PX"
+                f"{self.session_name} | Painted pixel, but balance didn't increase | Current balance: {round(self.balance, 2)} PX"
             )
 
     async def _paint_pixels(
@@ -615,6 +616,17 @@ class NotPXBot:
             response.raise_for_status()
 
             template_from_response = Image.open(io.BytesIO(await response.read()))
+
+            if template_from_response.size != (self.template_size, self.template_size):
+                template_cv2 = cv2.cvtColor(
+                    np.array(template_from_response), cv2.COLOR_RGBA2BGRA
+                )
+                template_cv2 = cv2.resize(
+                    template_cv2, (self.template_size, self.template_size)
+                )
+                template_cv2 = cv2.cvtColor(template_cv2, cv2.COLOR_BGR2RGBA)
+                template_from_response = Image.fromarray(template_cv2)
+
             template_from_response = template_from_response.convert("RGBA")
             template_array = np.array(template_from_response)
             template_2d = template_array.reshape(
