@@ -217,8 +217,8 @@ Sometimes when creating a new application, it may display an error. It is still 
 
 ```shell
 python3 -m venv .venv
-source venv/bin/activate
-pip3 install poetry
+source .venv/bin/activate
+pip install poetry
 poetry install --only main
 cp .env-example .env
 nano .env  # Specify your API_ID and API_HASH, the rest is taken by default
@@ -227,8 +227,8 @@ nano .env  # Specify your API_ID and API_HASH, the rest is taken by default
 ## Windows manual installation
 
 ```shell
-python -m venv venv
-venv\Scripts\activate
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 copy .env-example .env
 # Then open .env in any text editor and specify your API_ID and API_HASH, the rest is taken by default
