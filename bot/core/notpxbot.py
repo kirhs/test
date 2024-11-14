@@ -130,7 +130,7 @@ class NotPXBot:
             ip = response_json.get('ip', 'Not Found')
             country = response_json.get('country', 'Not Found')
 
-            logger.info(f"{self.session_name} | Proxy connected | IP: {ip} | {country}")
+            logger.info(f"{self.session_name} | Proxy connected | IP: {ip} | Country: {country}")
         except Exception:
             raise Exception(f"{self.session_name} | Proxy error | {proxy}")
 
