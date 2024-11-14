@@ -2,13 +2,14 @@ import asyncio
 import sys
 import traceback
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Self
+from typing import Dict, List, Optional
 
-from aiohttp_socks import ProxyConnector
 import jwt
 from aiohttp import ClientSession, ClientWebSocketResponse, WSMsgType
+from aiohttp_socks import ProxyConnector
 from attr import define, field
 from pyrogram.client import Client
+from typing_extensions import Self
 
 from bot.config.config import settings
 from bot.core.canvas_updater.centrifuge import decode_message, encode_commands

@@ -1,10 +1,11 @@
 import asyncio
 import io
 from functools import lru_cache
-from typing import Any, Dict, List, Self, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from PIL import Image
+from typing_extensions import Self
 
 
 class DynamicCanvasRenderer:
@@ -133,7 +134,7 @@ class DynamicCanvasRenderer:
                 px = x + offset_x
                 py = y + offset_y
 
-                if px < 0 or py <0 or px >= self.CANVAS_SIZE or py >= self.CANVAS_SIZE:
+                if px < 0 or py < 0 or px >= self.CANVAS_SIZE or py >= self.CANVAS_SIZE:
                     continue
 
                 rgb_color = self._hex_to_rgb(color)

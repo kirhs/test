@@ -23,6 +23,7 @@ protobuf = "^5.28.3"
 numpy = "^2.1.2"
 pillow = "^11.0.0"
 opencv-python = "^4.10.0.84"
+typing-extensions = "^4.12.2"
 
 
 [build-system]
