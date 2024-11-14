@@ -235,6 +235,43 @@ copy .env-example .env
 # Then open .env in any text editor and specify your API_ID and API_HASH, the rest is taken by default
 ```
 
+## Windows installation using powershell script
+
+<span style="color: yellow">NOTE: The install.ps1 script installs Chocolatey, a package manager for Windows, and uses it to install Python, Git, and NodeJS, if they are not already installed</span>
+
+We have also created powershell script which allows you to easily install NotPixelBot on Windows. So far it has been
+tested only on Windows 10, but also on Windows 11 with minor issues (maybe you woun't have any)
+
+Before running the script, you must do some preparation
+
+Open powershell and enter there this command. This will allow you to run scripts without restrictions.
+
+```shell
+Set-ExecutionPolicy Unrestricted -Scope CurrentUser
+```
+
+Ok, now we are ready. Execute following commands:
+
+```shell
+Invoke-WebRequest -Uri "https://github.com/Dellenoam/NotPixelBot/blob/master/windows_scripts/install.ps1" -OutFile "$env:TEMP\install.ps1"
+
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\install.ps1"
+```
+
+After that script will be downloaded to the temp folder and executed. When it asks you to enter path where to do git clone, just enter the path where you want to do git clone. For example `C:\Users\username\Scripts\NotPixelBot` without any quotes.
+
+## Windows uninstallation using powershell script
+
+<span style="color: red;">NOTE: The install.ps1 script installs Chocolatey, which is then used to install Python, Git, and Node.js. This uninstall.ps1 script will also uninstall these programs using Chocolatey, including Chocolatey itself. However, it will not remove the NotPixelBot folder. Therefore, please be cautious and ensure you manually delete the NotPixelBot folder if needed.</span>
+
+If you want to uninstall NotPixelBot, run following commands:
+
+```shell
+Invoke-WebRequest -Uri "https://github.com/Dellenoam/NotPixelBot/blob/master/windows_scripts/uninstall.ps1" -OutFile "$env:TEMP\uninstall.ps1"
+
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\uninstall.ps1"
+```
+
 ## Run the script
 
 ![NotPixel Intro](https://github.com/Dellenoam/NotPixelBot/blob/master/assets/NotPixel_Intro.gif)
