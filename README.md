@@ -27,11 +27,15 @@ Automated script for NotPixel with painting on canvas using a template, passing 
     </tr>
     <tr>
       <td>NotPX API change detection</td>
-      <td><img src="https://img.shields.io/badge/TODO-in%20progress-green" alt="TODO badge"></td>
+      <td><img src="https://img.shields.io/badge/Work_in_Progress-orange?style=flat-square" alt="X badge"></td>
     </tr>
     <tr>
       <td>Packaged .exe file</td>
-      <td><img src="https://img.shields.io/badge/TODO-in%20progress-green" alt="TODO badge"></td>
+      <td>❌</td>
+    </tr>
+    <tr>
+      <td>Easy install and uninstall scripts</td>
+      <td>✅</td>
     </tr>
     <tr>
       <td>Proxy binding to session</td>
@@ -51,11 +55,11 @@ Automated script for NotPixel with painting on canvas using a template, passing 
     </tr>
     <tr>
       <td>Auto-tasks</td>
-      <td><img src="https://img.shields.io/badge/TODO-in%20progress-green" alt="TODO badge"></td>
+      <td><img src="https://img.shields.io/badge/Work_in_Progress-orange?style=flat-square" alt="X badge"></td>
     </tr>
     <tr>
       <td>Auto-use bombs</td>
-      <td><img src="https://img.shields.io/badge/TODO-in%20progress-green" alt="TODO badge"></td>
+      <td><img src="https://img.shields.io/badge/Work_in_Progress-orange?style=flat-square" alt="X badge"></td>
     </tr>
     <tr>
       <td>Auto-claim px</td>
