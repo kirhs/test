@@ -1,6 +1,6 @@
 # NotPX Bot ⬛
 
-Automated script for NotPixelBot with painting on the template, passing in-game proof-of-humanity checks and more
+Automated script for NotPixel with painting on canvas using a template, passing in-game proof-of-humanity checks and more 
 
 ## Requirements
 
@@ -239,22 +239,31 @@ copy .env-example .env
 
 ![NotPixel Intro](https://github.com/Dellenoam/NotPixelBot/blob/master/assets/NotPixel_Intro.gif)
 
-You can run the script with `python3 main.py` or `python main.py` if you are inside the `NotPixelBot` folder
+Before running the script, you always need to activate the virtual environment.
+
+```shell
+# Linux
+source .venv\bin\activate
+# Windows
+.venv\Scripts\activate
+```
+
+To run the script, use `python3 main.py` on Linux or `python main.py` on Windows.
 
 Also, you can use flag `--action` or `-a` to quickly run the script with specified action.
 
 ```shell
 # Linux
-~/NotPixelBot >>> python3 main.py --action [1/2]
+python3 main.py --action [1/2]
 # Windows
-~/NotPixelBot >>> python main.py --action [1/2]
+python main.py --action [1/2]
 
 # Or
 
 # Linux
-~/NotPixelBot >>> python3 main.py -a [1/2]
+python3 main.py -a [1/2]
 # Windows
-~/NotPixelBot >>> python main.py -a [1/2]
+python main.py -a [1/2]
 ```
 
 Where [1/2] is:
@@ -266,9 +275,16 @@ So for example if you want to create a session, you can run this command:
 
 ```shell
 # Linux
-~/NotPixelBot >>> python3 main.py -a 1
+python3 main.py --action 1
 # Windows
-~/NotPixelBot >>> python main.py -a 1
+python main.py --action 1
+
+# Or
+
+# Linux
+python3 main.py -a 1
+# Windows
+python main.py -a 1
 ```
 
 ## Contacts

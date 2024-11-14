@@ -123,12 +123,14 @@ class NotPXBot:
     async def _proxy_checker(self, session: aiohttp.ClientSession, proxy: str):
         try:
             response = await session.get(
-                "https://ipinfo.io/ip", timeout=aiohttp.ClientTimeout(10)
+                "https://ipinfo.io/json", timeout=aiohttp.ClientTimeout(10)
             )
             response.raise_for_status()
-            ip = await response.text()
+            response_json = await response.json()
+            ip = response_json.get('ip', 'Not Found')
+            country = response_json.get('country', 'Not Found')
 
-            logger.info(f"{self.session_name} | Proxy connected | IP: {ip}")
+            logger.info(f"{self.session_name} | Proxy connected | IP: {ip} | Country: {country}")
         except Exception:
             raise Exception(f"{self.session_name} | Proxy error | {proxy}")
 
