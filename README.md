@@ -260,6 +260,8 @@ powershell -ExecutionPolicy Bypass -File "$env:TEMP\install.ps1"
 
 After that script will be downloaded to the temp folder and executed. When it asks you to enter path where to do git clone, just enter the path where you want to do git clone. For example `C:\Users\username\Scripts\NotPixelBot` without any quotes.
 
+Well, now you can proceed to the [Run the script](#run-the-script) section.
+
 ## Windows uninstallation using powershell script
 
 <span style="color: red;">NOTE: The install.ps1 script installs Chocolatey, which is then used to install Python, Git, and Node.js. This uninstall.ps1 script will also uninstall these programs using Chocolatey, including Chocolatey itself. However, it will not remove the NotPixelBot folder. Therefore, please be cautious and ensure you manually delete the NotPixelBot folder if needed.</span>
