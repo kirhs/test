@@ -127,10 +127,12 @@ class NotPXBot:
             )
             response.raise_for_status()
             response_json = await response.json()
-            ip = response_json.get('ip', 'Not Found')
-            country = response_json.get('country', 'Not Found')
+            ip = response_json.get("ip", "Not Found")
+            country = response_json.get("country", "Not Found")
 
-            logger.info(f"{self.session_name} | Proxy connected | IP: {ip} | Country: {country}")
+            logger.info(
+                f"{self.session_name} | Proxy connected | IP: {ip} | Country: {country}"
+            )
         except Exception:
             raise Exception(f"{self.session_name} | Proxy error | {proxy}")
 
@@ -611,6 +613,9 @@ class NotPXBot:
     async def _paint_pixels(
         self, session: aiohttp.ClientSession, attempts: int = 1
     ) -> None:
+        MAX_CONSECUTIVE_ZERO = 5
+        consecutive_zero_rewards = 0
+
         try:
             response = await session.get(
                 self.template_url, headers=self._headers["image_notpx"]
@@ -643,6 +648,13 @@ class NotPXBot:
                     if self._charges <= 0:
                         break
 
+                    if consecutive_zero_rewards >= MAX_CONSECUTIVE_ZERO:
+                        logger.warning(
+                            f"{self.session_name} | No reward for {MAX_CONSECUTIVE_ZERO} consecutive times. Resetting template."
+                        )
+                        await self._set_template(session)  # Reset template
+                        return await self._paint_pixels(session, attempts=attempts)
+
                     canvas_array = self._canvas_renderer.get_canvas
                     canvas_2d = canvas_array.reshape(
                         (
@@ -662,12 +674,20 @@ class NotPXBot:
                         continue
 
                     if not np.array_equal(template_pixel[:3], canvas_pixel[:3]):
+                        initial_balance = self.balance
+
                         await self._paint_pixel(
                             session=session,
                             canvas_x=canvas_x,
                             canvas_y=canvas_y,
                             template_pixel=template_pixel,
                         )
+
+                        if round(self.balance, 2) <= round(initial_balance, 2):
+                            consecutive_zero_rewards += 1
+                        else:
+                            consecutive_zero_rewards = 0
+
                         await asyncio.sleep(random.uniform(0.95, 2.3))
 
         except Exception:
